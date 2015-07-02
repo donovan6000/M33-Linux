@@ -3,13 +3,18 @@
 #include <iomanip>
 #include <fstream>
 #include <cstring>
-#include <vector>
+#include <cmath>
 #include <unistd.h>
 #include <fcntl.h>
-#include <dirent.h>
 #include <termios.h>
 
+#include "gcode.h"
+
 using namespace std;
+
+
+// Definitions
+enum filamentTypes {PLA, ABS, HIPS, OTHER};
 
 
 // Global variables
@@ -29,16 +34,26 @@ double frontRightOrientation;
 double frontLeftOrientation;
 uint8_t status;
 string folderLocation;
+
 uint8_t temperature = 215;
+filamentTypes filament = PLA;
+double sizeX, sizeY, sizeZ;
+
+bool useBasicPreparation = false;
+bool useWaveBonding = false;
+bool useThermalBonding = false;
+bool useBedCompensation = false;
+bool useBacklashCompensation = false;
+bool useFeedRateConversion = false;
 
 
 // Function prototypes
 
 /*
-Name: Initialize USB
-Purpose: Initialized the USB device with a specified VID and PID
+Name: Connect to printer
+Purpose: Connects to the printer
 */
-bool initializeUSB(const char *vid, const char *pid);
+bool connectToPrinter();
 
 /*
 Name: Send Data
@@ -59,10 +74,46 @@ Purpose: Receives response from the device
 string getResponse();
 
 /*
-Name: Pre-process file
-Purpose: Adjusts the input file to compensate for printer specific values
+Name: Get Print Dimensions
+Purpose: Calculates max X, Y, and Z sizes of the print
 */
-bool preprocessFile();
+bool getPrintDimensions();
+
+/*
+Name: Basic Preparation Preprocessor
+Purpose: Adjusts the input file to remove unwanted commands and adds printer specific starting and ending command sequences
+*/
+bool basicPreparationPreprocessor();
+
+/*
+Name: Wave Bonding Preprocessor
+Purpose: Adjusts the input file to incoporate wave bonding
+*/
+bool waveBondingPreprocessor();
+
+/*
+Name: Thermal Bonding Preprocessor
+Purpose: Adjusts the input file to incoporate thermal bonding
+*/
+bool thermalBondingPreprocessor();
+
+/*
+Name: Bed Compensation Preprocessor
+Purpose: Adjusts the input file to incoporate bed compensation
+*/
+bool bedCompensationPreprocessor();
+
+/*
+Name: Backlash Compensation Preprocessor
+Purpose: Adjusts the input file to incoporate backlash compensation
+*/
+bool backlashCompensationPreprocessor();
+
+/*
+Name: Feed Rate Conversion Preprocessor
+Purpose: Adjusts the input file to incoporate feed rate conversion
+*/
+bool feedRateConversionPreprocessor();
 
 
 // Main function
@@ -74,14 +125,6 @@ int main(int argc, char *argv[]) {
 	ifstream input;
 	char character;
 	uint64_t totalLines = 0, lineCounter = 0;
-	
-	// Check if not root
-    	if(getuid()) {
-
-    		// Display error
-		cout << "Elevated privileges required" << endl;
-		return 0;
-	}
 	
 	// Check if a file is provided
 	if(argc >= 2) {
@@ -97,7 +140,7 @@ int main(int argc, char *argv[]) {
 	}
 	
 	// Wait for device to be connected
-	while(!initializeUSB("03EB", "2404")) {
+	while(!connectToPrinter()) {
 		cout << "M3D not detected" << endl;
 		usleep(500000);
 	}
@@ -110,123 +153,69 @@ int main(int argc, char *argv[]) {
 	while(1) {
 		sendDataAscii("M115");
 		while(read(fd, &character, 1) == -1);
-		if(character != 'B')
+		if(character == 'e')
 			break;
 		sendDataAscii("Q");
-		initializeUSB("03EB", "2404");
+		while(!connectToPrinter());
+		usleep(50000);
 	}
 	
 	// Get device info
-	while(1) {
+	sendDataBinary("M115");
+	response = getResponse();
 	
-		// Send command until a valid response is received
-		do {
-			sendDataBinary("M115");
-			response = getResponse();
-		} while(response.substr(0, 2) != "ok");
-	
-		// Check if entire response was obtained
-		if(response.find("SERIAL_NUMBER:") != string::npos && response.find("SERIAL_NUMBER:") == response.length() - 30) {
-		
-			// Set firmware and serial number 
-			firmwareVersion = response.substr(response.find("FIRMWARE_VERSION:") + 17, response.find(" ", response.find("FIRMWARE_VERSION:")) - response.find("FIRMWARE_VERSION:") - 17);
-			serialNumber = response.substr(response.find("SERIAL_NUMBER:") + 14);
-			break;
-		}
-	}
+	// Set firmware and serial number 
+	firmwareVersion = response.substr(response.find("FIRMWARE_VERSION:") + 17, response.find(" ", response.find("FIRMWARE_VERSION:")) - response.find("FIRMWARE_VERSION:") - 17);
+	serialNumber = response.substr(response.find("SERIAL_NUMBER:") + 14);
 	
 	// Get bed offsets
-	while(1) {
+	sendDataBinary("M578");
+	response = getResponse();
 	
-		// Send command until a valid response is received
-		do {
-			sendDataBinary("M578");
-			response = getResponse();
-		} while(response.substr(0, 2) != "ok");
-		
-		// Check if entire response was obtained
-		if(response.find("ZO:") != string::npos && response.find("ZO:") <= response.length() - 9) {
-		
-			// Set bed offsets
-			backRightOffset = stod(response.substr(response.find("BRO:") + 4, response.find(" ", response.find("BRO:")) - response.find("BRO:") - 4));
-			backLeftOffset = stod(response.substr(response.find("BLO:") + 4, response.find(" ", response.find("BLO:")) - response.find("BLO:") - 4));
-			frontRightOffset = stod(response.substr(response.find("FRO:") + 4, response.find(" ", response.find("FRO:")) - response.find("FRO:") - 4));
-			frontLeftOffset = stod(response.substr(response.find("FLO:") + 4, response.find(" ", response.find("FLO:")) - response.find("FLO:") - 4));
-			bedHeightOffset = stod(response.substr(response.find("ZO:") + 3));
-			break;
-		}
-	}
+	// Set bed offsets
+	backRightOffset = stod(response.substr(response.find("BRO:") + 4, response.find(" ", response.find("BRO:")) - response.find("BRO:") - 4));
+	backLeftOffset = stod(response.substr(response.find("BLO:") + 4, response.find(" ", response.find("BLO:")) - response.find("BLO:") - 4));
+	frontRightOffset = stod(response.substr(response.find("FRO:") + 4, response.find(" ", response.find("FRO:")) - response.find("FRO:") - 4));
+	frontLeftOffset = stod(response.substr(response.find("FLO:") + 4, response.find(" ", response.find("FLO:")) - response.find("FLO:") - 4));
+	bedHeightOffset = stod(response.substr(response.find("ZO:") + 3));
 
 	// Get backlash
-	while(1) {
+	sendDataBinary("M572");
+	response = getResponse();
 	
-		// Send command until a valid response is received
-		do {
-			sendDataBinary("M572");
-			response = getResponse();
-		} while(response.substr(0, 2) != "ok");
-		
-		// Check if entire response was obtained
-		if(response.find("BY:") != string::npos && response.find("BY:") <= response.length() - 9) {
-
-			// Set backlash values
-			backlashX = stod(response.substr(response.find("BX:") + 3, response.find(" ", response.find("BX:")) - response.find("BX:") - 3));
-			backlashY = stod(response.substr(response.find("BY:") + 3));
-			break;
-		}
-	}
-
+	// Set backlash values
+	backlashX = stod(response.substr(response.find("BX:") + 3, response.find(" ", response.find("BX:")) - response.find("BX:") - 3));
+	backlashY = stod(response.substr(response.find("BY:") + 3));
+	
 	// Get bed orientation
-	while(1) {
+	sendDataBinary("M573");
+	response = getResponse();
 	
-		// Send command until a valid response is received
-		do {
-			sendDataBinary("M573");
-			response = getResponse();
-		} while(response.substr(0, 2) != "ok");
-		
-		// Check if entire response was obtained
-		if(response.find("FR:") != string::npos && response.find("FR:") <= response.length() - 9) {
-
-			// Set bed orientation
-			backRightOrientation = stod(response.substr(response.find("BR:") + 3, response.find(" ", response.find("BR:")) - response.find("BR:") - 3));
-			backLeftOrientation = stod(response.substr(response.find("BL:") + 3, response.find(" ", response.find("BL:")) - response.find("BL:") - 3));
-			frontLeftOrientation = stod(response.substr(response.find("FL:") + 3, response.find(" ", response.find("FL:")) - response.find("FL:") - 3));
-			frontRightOrientation = stod(response.substr(response.find("FR:") + 3));
-			break;
-		}
-	}
+	// Set bed orientation
+	backRightOrientation = stod(response.substr(response.find("BR:") + 3, response.find(" ", response.find("BR:")) - response.find("BR:") - 3));
+	backLeftOrientation = stod(response.substr(response.find("BL:") + 3, response.find(" ", response.find("BL:")) - response.find("BL:") - 3));
+	frontLeftOrientation = stod(response.substr(response.find("FL:") + 3, response.find(" ", response.find("FL:")) - response.find("FL:") - 3));
+	frontRightOrientation = stod(response.substr(response.find("FR:") + 3));
 	
 	// Get status
-	while(1) {
+	sendDataBinary("M117");
+	response = getResponse();
 	
-		// Send command until a valid response is received
-		do {
-			sendDataBinary("M117");
-			response = getResponse();
-		} while(response.substr(0, 2) != "ok");
-		
-		// Check if entire response was obtained
-		if(response.find("S:") != string::npos && response.find("S:") <= response.length() - 3) {
-
-			// Set status
-			status = stod(response.substr(response.find("S:") + 2));
-			break;
-		}
-	}
+	// Set status
+	status = stod(response.substr(response.find("S:") + 2));
 	
 	// Display device information
 	cout << endl << "Firmware: " << firmwareVersion << endl;
 	cout << "Serial Number: " << serialNumber << ' ';
 	if(serialNumber.substr(0, 2) == "BK")
 		cout << "Black";
-	else if(serialNumber[0] == 'S')
+	else if(serialNumber.substr(0, 2) == "SL")
 		cout << "Silver";
-	else if(serialNumber[0] == 'B')
+	else if(serialNumber.substr(0, 2)  == "BL")
 		cout << "Blue";
-	else if(serialNumber[0] == 'G')
+	else if(serialNumber.substr(0, 2) == "GR")
 		cout << "Green";
-	else if(serialNumber[0] == 'O')
+	else if(serialNumber.substr(0, 2) == "OR")
 		cout << "Orange";
 	cout << endl << "Back Right Offset: " << fixed << setprecision(4) << backRightOffset << endl;
 	cout << "Back Left Offset: " << backLeftOffset << endl;
@@ -247,7 +236,7 @@ int main(int argc, char *argv[]) {
 	if(argc >= 2) {
 	
 		// Create temporary folder
-		folderLocation = mkdtemp(const_cast<char *>(static_cast<string>("/tmp/M3D-XXXXXX").c_str()));
+		folderLocation = mkdtemp(const_cast<char *>(static_cast<string>("/tmp/m3d-XXXXXX").c_str()));
 		
 		// Check if creating processed file was successful
 		processedFile.open(folderLocation + "/output.gcode", ios::out | ios::binary | ios::app);
@@ -259,51 +248,77 @@ int main(int argc, char *argv[]) {
 			// Read in input file
 			processedFile << input.rdbuf();
 			processedFile.close();
-			
-			// Check if preprocessing file was successful
-			if(preprocessFile()) {
-			
-				// Determine the number of lines in the processed file
-				processedFile.open(folderLocation + "/output.gcode", ios::in | ios::binary);
-				while(processedFile.peek() != EOF) {
-					getline(processedFile, line);
-					totalLines++;
-				}
-				processedFile.clear();
-				processedFile.seekg(0, ios::beg);
-			
-				// Display message
-				cout << "Starting print" << endl;
-			
-				// Go through file
-				while(processedFile.peek() != EOF) {
 
-					// Get line
-					getline(processedFile, line);
-	
-					// Display percent complete
-					lineCounter++;
-					cout << dec << lineCounter << '/' << totalLines << ' ' << static_cast<float>(lineCounter) / totalLines << '%' << endl;
+			// Get print dimensions
+			getPrintDimensions();
+			
+			// Use preparation preprocessor if set
+			if(useBasicPreparation)
+				basicPreparationPreprocessor();
+			
+			// Use wave bonding preprocessor if set
+			if(useWaveBonding)
+				waveBondingPreprocessor();
+			
+			// Use thermal bonding preprocessor if set
+			if(useThermalBonding)
+				thermalBondingPreprocessor();
+			
+			// Use bed compensation preprocessor if set
+			if(useBedCompensation)
+				bedCompensationPreprocessor();
+			
+			// Use backlash compensation preprocessor if set
+			if(useBacklashCompensation)
+				backlashCompensationPreprocessor();
+			
+			// Use feed rate conversion proprocessor if set
+			if(useFeedRateConversion)
+				feedRateConversionPreprocessor();
+			
+			// Determine the number of command lines in the fully processed file
+			processedFile.open(folderLocation + "/output.gcode", ios::in | ios::binary);
+			while(processedFile.peek() != EOF) {
+				getline(processedFile, line);
+				totalLines++;
+			}
+			processedFile.clear();
+			processedFile.seekg(0, ios::beg);
+		
+			// Display message
+			cout << "Starting print" << endl;
+		
+			// Go through file
+			while(processedFile.peek() != EOF) {
 
-					// Send line to the device
-					do {
+				// Get line
+				getline(processedFile, line);
+
+				// Display percent complete
+				lineCounter++;
+				cout << dec << lineCounter << '/' << totalLines << ' ' << static_cast<float>(lineCounter) / totalLines << '%' << endl;
+
+				// Send line to the device
+				do {
 					
-						// Display command
-						cout << "Send: " << line.c_str() << endl;
-						
-						// Get next command if line didn't contain valid g-code
-						if(!sendDataBinary(line.c_str()))
-							break;
-						
-						// Get valid response
+					// Get next command if line didn't contain valid g-code
+					if(!sendDataBinary(line.c_str())) {
+					
+						cout << "Failed to parse " << line << endl << endl;
+						break;
+					}
+					
+					// Display command
+					cout << "Send: " << line << endl;
+					
+					// Get valid response
+					response = getResponse();
+					if(line.substr(0, 2) == "G0" && response == "Info:Too small")
 						response = getResponse();
-						if(line.substr(0, 2) == "G0" && response == "Info:Too small")
-							response = getResponse();
-						
-						// Display response
-						cout << "Receive: " << response << endl << endl;
-					} while(response.substr(0, 2) != "ok");
-				}
+					
+					// Display response
+					cout << "Receive: " << response << endl << endl;
+				} while(response.substr(0, 2) != "ok");
 			
 				// Close processed file
 				processedFile.close();
@@ -339,13 +354,16 @@ int main(int argc, char *argv[]) {
 		
 			// Send g-code to device
 			do {
-			
-				// Display command
-				cout << "Send: " << line.c_str() << endl;
 				
 				// Get next command if line didn't contain valid g-code
-				if(!sendDataBinary(line.c_str()))
+				if(!sendDataBinary(line.c_str())) {
+				
+					cout << "Failed to parse command" << endl << endl;
 					break;
+				}
+				
+				// Display command
+				cout << "Send: " << line << endl;
 				
 				// Get valid response
 				response = getResponse();
@@ -354,7 +372,7 @@ int main(int argc, char *argv[]) {
 				
 				// Display response
 				cout << "Receive: " << response << endl << endl;
-			} while(response.substr(0, 2) != "ok");
+			} while(response.substr(0, 2) != "ok" && response.substr(0, 2) != "T:");
 		}
 	}
 	
@@ -367,71 +385,36 @@ int main(int argc, char *argv[]) {
 
 
 // Supporting function implementation
-bool initializeUSB(const char *vid, const char *pid) {
+bool connectToPrinter() {
 
 	// Initialize variables
-	DIR *path;
-        dirent *entry;
-        string info;
-        ifstream device;
         termios settings;
         
-        // Check if path exists
-        if((path = opendir("/sys/class/tty/"))) {
+        // Close file descriptor if open
+        if(fd != -1)
+        	close(fd);
         
-        	// Go through all tty devices
-                while((entry = readdir(path)))
-                
-                	// Check if current device is a serial device
-                        if(strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..") && !strncmp("ttyACM", entry->d_name, 6)) {
-                        
-                        	// Check if uevent file exists for the device
-                        	device.open(static_cast<string>("/sys/class/tty/") + entry->d_name + "/device/uevent");
-                        	if(device.good()) {
-                        	
-		                	// Read in file
-					while(device.peek() != EOF)
-						info.push_back(device.get());
-					device.close();
-					
-					// Check if device has the specified pid and vid
-					if(info.find(static_cast<string>("MODALIAS=usb:v") + vid + 'p' + pid) != string::npos) {
+        // Check if opening device was successful
+	if((fd = open("/dev/micro_m3d", O_RDWR | O_NONBLOCK)) != -1) {
+      
+		// Set serial protocol to 8n1 with 921600 baud rate
+		memset(&settings, 0, sizeof(settings));
+		settings.c_iflag = 0;
+		settings.c_oflag = 0;
+		settings.c_cflag= CS8 | CREAD | CLOCAL;
+		settings.c_lflag = 0;
+		settings.c_cc[VMIN] = 1;
+		settings.c_cc[VTIME] = 5;
+		cfsetospeed(&settings, B921600);
+		cfsetispeed(&settings, B921600);
 
-						// Close the file descriptor if it's already open
-						if(fd != -1)
-			       				close(fd);
-			       			
-			       			// Check if opening file was successful
-						if((fd = open((static_cast<string>("/dev/") + entry->d_name).c_str(), O_RDWR | O_NONBLOCK)) != -1) {
-						
-							// Close path
-			       				closedir(path);
-			       				
-			       				// Set serial protocol to 8n1 with 921600 baud rate
-							memset(&settings, 0, sizeof(settings));
-							settings.c_iflag = 0;
-							settings.c_oflag = 0;
-							settings.c_cflag= CS8 | CREAD | CLOCAL;
-							settings.c_lflag = 0;
-							settings.c_cc[VMIN] = 1;
-							settings.c_cc[VTIME] = 5;
-							cfsetospeed(&settings, B921600);
-							cfsetispeed(&settings, B921600);
+		// Apply settings
+		tcsetattr(fd, TCSAFLUSH, &settings);
+		tcdrain(fd);
 
-							// Apply settings after remaining data has been sent
-							tcsetattr(fd, TCSAFLUSH, &settings);
-							tcdrain(fd);	
-			       				
-			       				// Return true
-			       				return true;
-			       			}
-					}
-				}
-			}
-                
-                // Close path
-                closedir(path);
-        }
+		// Return true
+		return true;
+	}
 	
 	// Return false
 	return false;
@@ -455,325 +438,22 @@ bool sendDataBinary(const char *data) {
 
 	// Initialize variables
 	bool returnValue;
-	char parameterIdentifier = 0;
-	vector<string> parameterValue(16);
-	vector<uint8_t> request(4);
-	string currentValue;
-	char *commandStart;
-	uint32_t dataType = 0x1080;
-	uint16_t sum1 = 0, sum2 = 0;
-	int32_t tempNumber, *tempPointer;
-	float tempFloat;
+	Gcode gcode;
 	
-	// Skip leading whitespace
-	for(commandStart = const_cast<char *>(data); strlen(commandStart) && (*commandStart == ' ' || *commandStart == '\t'); commandStart++);
+	// Check if line was successfully parsed
+	if(gcode.parseLine(data)) {
 	
-	// Check if data is a host command
-	if(commandStart[0] == '@') {
-	
-		// Send unmodified data to the device
+		// Send binary request to the device
 		tcflush(fd, TCIOFLUSH);
-		returnValue = write(fd, commandStart, strlen(commandStart)) != -1;
+		returnValue = write(fd, gcode.getBinary().data(), gcode.getBinary().size()) != -1;
+		tcdrain(fd);
+		
+		// Return value
+		return returnValue;
 	}
 	
-	// Otherwise
-	else {
-	
-		// Go through data
-		for(uint8_t i = 0; i <= strlen(commandStart); i++) {
-		
-			// Check if a parameter is detected
-			if(i == 0 || commandStart[i - 1] == ' ' || !commandStart[i]) {
-			
-				// Check if value has been obtained for the parameter
-				if(i) {
-				
-					// Enforce parameter order as N, M, G, X, Y, Z, E, F, T, S, P, I, J, R, D then string
-					switch(parameterIdentifier) {
-					
-						case 'N':
-						
-							// Set data type
-							dataType |= 1;
-						
-							// Store parameter value
-							parameterValue[0] = currentValue;
-						break;
-						
-						case 'M':
-						
-							// Set data type
-							dataType |= (1 << 1);
-						
-							// Store parameter value
-							parameterValue[1] = currentValue;
-						break;
-						
-						case 'G':
-						
-							// Set data type
-							dataType |= (1 << 2);
-						
-							// Store parameter value
-							parameterValue[2] = currentValue;
-						break;
-						
-						case 'X':
-						
-							// Set data type
-							dataType |= (1 << 3);
-						
-							// Store parameter value
-							parameterValue[3] = currentValue;
-						break;
-						
-						case 'Y':
-						
-							// Set data type
-							dataType |= (1 << 4);
-						
-							// Store parameter value
-							parameterValue[4] = currentValue;
-						break;
-						
-						case 'Z':
-						
-							// Set data type
-							dataType |= (1 << 5);
-							
-							// Store parameter value
-							parameterValue[5] = currentValue;
-						break;
-						
-						
-						case 'E':
-						
-							// Set data type
-							dataType |= (1 << 6);
-						
-							// Store parameter value
-							parameterValue[6] = currentValue;
-						break;
-						
-						case 'F':
-						
-							// Set data type
-							dataType |= (1 << 8);
-						
-							// Store parameter value
-							parameterValue[7] = currentValue;
-						break;
-						
-						case 'T':
-						
-							// Set data type
-							dataType |= (1 << 9);
-						
-							// Store parameter value
-							parameterValue[8] = currentValue;
-						break;
-						
-						case 'S':
-						
-							// Set data type
-							dataType |= (1 << 10);
-						
-							// Store parameter value
-							parameterValue[9] = currentValue;
-						break;
-						
-						case 'P':
-						
-							// Set data type
-							dataType |= (1 << 11);
-						
-							// Store parameter value
-							parameterValue[10] = currentValue;
-						break;
-						
-						case 'I':
-						
-							// Set data type
-							dataType |= (1 << 16);
-						
-							// Store parameter value
-							parameterValue[11] = currentValue;
-						break;
-						
-						case 'J':
-						
-							// Set data type
-							dataType |= (1 << 17);
-						
-							// Store parameter value
-							parameterValue[12] = currentValue;
-						break;
-						
-						case 'R':
-						
-							// Set data type
-							dataType |= (1 << 18);
-						
-							// Store parameter value
-							parameterValue[13] = currentValue;
-						break;
-						
-						case 'D':
-						
-							// Set data type
-							dataType |= (1 << 19);
-						
-							// Store parameter value
-							parameterValue[14] = currentValue;
-						break;
-					}
-				}
-				
-				// Reset current value
-				currentValue.clear();
-				
-				// Check if a string is required
-				if(parameterIdentifier == 'M' && (parameterValue[1] == "23" || parameterValue[1] == "28" || parameterValue[1] == "29" || parameterValue[1] == "30" || parameterValue[1] == "32" || parameterValue[1] == "117")) {
-				
-					// Get string data
-					for(; i < strlen(commandStart); i++)
-						currentValue.push_back(commandStart[i]);
-					
-					// Check if a string exists
-					if(currentValue.size()) {
-					
-						// Set data type
-						dataType |= (1 << 15);
-					
-						// Store parameter value
-						parameterValue[15] = currentValue;
-					
-						// Set fifth byte of request to string length
-						request.push_back(currentValue.size());
-					}
-				}
-				
-				// Check if a comment is detected
-				if(commandStart[i] == ';')
-			
-					// Stop parsing line
-					break;
-				
-				// Set parameter identifier
-				parameterIdentifier = commandStart[i];
-			}
-		
-			// Otherwise
-			else if(commandStart[i] != ' ' && commandStart[i] != '\t')
-		
-				// Get current value
-				currentValue.push_back(commandStart[i]);
-		}
-		
-		// Check if command was empty
-		if(dataType == 0x1080)
-		
-			// Return false
-			return false;
-		
-		// Fill first four bytes of request to data type
-		request[0] = dataType;
-		request[1] = dataType >> 8;
-		request[2] = dataType >> 16;
-		request[3] = dataType >> 24;
-	
-		// Go through all parameters
-		for(uint8_t i = 0; i < parameterValue.size(); i++)
-		
-			// Check if current parameter is set
-			if(parameterValue[i].size()) {
-			
-				// Determine parameter command
-				switch(i) {
-			
-					// Check if N, M, or G command
-					case 0:
-					case 1:
-					case 2:
-				
-						// Set 2 byte integer parameter value
-						tempNumber = atoi(parameterValue[i].c_str());
-						request.push_back(tempNumber & 0xFF);
-						request.push_back((tempNumber >> 8) & 0xFF);
-					break;
-					
-					// Check if X, Y, Z, E, F, I, J, R or D command
-					case 3:
-					case 4:
-					case 5:
-					case 6:
-					case 7:
-					case 11:
-					case 12:
-					case 13:
-					case 14:
-					
-						// Set 4 byte float parameter value
-						tempFloat = atof(parameterValue[i].c_str());
-						tempPointer = (int32_t*)&tempFloat;
-						request.push_back(*tempPointer & 0xFF);
-						request.push_back((*tempPointer >> 8) & 0xFF);
-						request.push_back((*tempPointer >> 16) & 0xFF);
-						request.push_back((*tempPointer >> 24) & 0xFF);
-					break;
-					
-					// Check if T command
-					case 8:
-					
-						// Set 1 byte integer parameter value
-						tempNumber = atoi(parameterValue[i].c_str());
-						request.push_back(tempNumber & 0xFF);
-					break;
-					
-					// Check if S or P command
-					case 9:
-					case 10:
-					
-						// Set 4 byte integer parameter value
-						tempNumber = atoi(parameterValue[i].c_str());
-						request.push_back(tempNumber & 0xFF);
-						request.push_back((tempNumber >> 8) & 0xFF);
-						request.push_back((tempNumber >> 16) & 0xFF);
-						request.push_back((tempNumber >> 24) & 0xFF);
-					break;
-					
-					// Check if string command
-					case 15:
-					
-						// Set string parameter value
-						for(uint8_t j = 0; j < parameterValue[i].length(); j++)
-							request.push_back(parameterValue[i][j]);
-					break;
-				}
-			}
-	
-		// Go through all values
-		for(uint8_t index = 0; index < request.size(); index++) {
-
-			// Set sums
-			sum1 = (sum1 + request[index]) % 0xFF;
-			sum2 = (sum1 + sum2)  % 0xFF;
-		}
-
-		// Append Fletcher 16 checksum checksum to request
-		request.push_back(sum1);
-		request.push_back(sum2);
-			
-		// Send request to the device
-		tcflush(fd, TCIOFLUSH);
-		returnValue = write(fd, request.data(), request.size()) != -1;
-	}
-	
-	// Wait until request is sent
-	tcdrain(fd);
-	
-	// Return value
-	return returnValue;
+	// Return false
+	return false;
 }
 
 string getResponse() {
@@ -795,10 +475,191 @@ string getResponse() {
 	return response;
 }
 
-bool preprocessFile() {
+bool getPrintDimensions() {
+
+	// Initialize variables
+	string line;
+	Gcode gcode;
+	fstream file(folderLocation + "/output.gcode", ios::in | ios::binary);
+	double minX = 10000, maxX = 0;
+	double minY = 10000, maxY = 0;
+	double minZ = 10000, maxZ = 0;
+	double localX = 0, localY = 0, localZ = 0, localE = 0, commandX, commandY, commandZ, commandE;
+	bool relativeMode = false, positiveExtrusion;
+	
+	// Check if file was opened successfully
+	if(file.good()) {
+	
+		// Go through file
+		while(file.peek() != EOF) {
+	
+			// Read in line
+			getline(file, line);
+			
+			// Check if line was parsed successfully and it's a G command
+			if(gcode.parseLine(line) && gcode.hasValue('G')) {
+			
+				// Check what parameter is associated with the command
+				switch(stoi(gcode.getValue('G'))) {
+				
+					case 0:
+					case 1:
+					
+						// Clear positive extruding
+						positiveExtrusion = false;
+						
+						// Check if extruding
+						if(gcode.hasValue('E')) {
+						
+							// Get E value of the command
+							commandE = stod(gcode.getValue('E'));
+							
+							// Set positive extrusion based on adjusted extrusion value
+							if(relativeMode) {
+								positiveExtrusion = commandE > 0;
+								localE += commandE;
+							}
+							
+							else {
+								positiveExtrusion = commandE > localE;
+								localE = commandE;
+							}
+						}
+						
+						// Check if positive extruding
+						if(positiveExtrusion) {
+						
+							// Set minimums and maximums
+							minX = minX < localX ? minX : localX;
+							maxX = maxX > localX ? maxX : localX;
+							minY = minY < localY ? minY : localY;
+							maxY = maxY > localY ? maxY : localY;
+							minZ = minZ < localZ ? minZ : localZ;
+							maxZ = maxZ > localZ ? maxZ : localZ;
+						}
+						
+						// Check if command has an X value
+						if(gcode.hasValue('X')) {
+						
+							// Get X value of the command
+							commandX = stod(gcode.getValue('X'));
+							
+							// Set local X
+							localX = relativeMode ? localX + commandX : commandX;
+						}
+						
+						// Check if command has a Y value
+						if(gcode.hasValue('Y')) {
+						
+							// Get Y value of the command
+							commandY = stod(gcode.getValue('Y'));
+							
+							// Set local Y
+							localY = relativeMode ? localY + commandY : commandY;
+						}
+						
+						// Check if command has a X value
+						if(gcode.hasValue('Z')) {
+						
+							// Get X value of the command
+							commandZ = stod(gcode.getValue('Z'));
+							
+							// Set local Z
+							localZ = relativeMode ? localZ + commandZ : commandZ;
+						}
+						
+						// Check if positive extruding
+						if(positiveExtrusion) {
+						
+							// Set minimums and maximums
+							minX = minX < localX ? minX : localX;
+							maxX = maxX > localX ? maxX : localX;
+							minY = minY < localY ? minY : localY;
+							maxY = maxY > localY ? maxY : localY;
+							minZ = minZ < localZ ? minZ : localZ;
+							maxZ = maxZ > localZ ? maxZ : localZ;
+						}
+					
+					break;
+					
+					case 90:
+					
+						// Clear relative mode
+						relativeMode = false;
+					break;
+				
+					case 91:
+					
+						// Set relative mode
+						relativeMode = true;
+					break;
+				}
+			}
+		}
+		
+		// Set X, Y, and Z sizes of the print
+		sizeX = maxX - minX;
+		sizeY = maxY - minY;
+		sizeZ = maxZ - minZ;
+		
+		// Return true
+		return true;
+	}
+	
+	// Return false
+	return false;
+}
+
+uint16_t getBoundedTemperature(uint16_t temperature) {
+
+	// Return temperature bounded by range
+	return temperature > 285 ? 285 : temperature < 150 ? 150 : temperature;
+}
+
+double getDistance(const Gcode &firstPoint, const Gcode &secondPoint) {
+
+	// Return distance between the two values
+	return sqrt(pow(stod(firstPoint.getValue('X')) - stod(secondPoint.getValue('X')), 2) + pow(stod(firstPoint.getValue('Y')) - stod(secondPoint.getValue('Y')), 2));
+}
+
+bool isSharpCorner(const Gcode &point, const Gcode &refrence) {
+
+	// Initialize variables
+	double currentX = stod(point.getValue('X'));
+	double currentY = stod(point.getValue('Y'));
+	double previousX = stod(refrence.getValue('X'));
+	double previousY = stod(refrence.getValue('Y'));
+	
+	// Calculate value
+	double value = acos((currentX * previousX + currentY * previousY) / (pow(currentX * currentX + currentY * currentY, 2) * pow(previousX * previousX + previousY * previousY, 2)));
+	
+	// Return if sharp corner
+	return value > 0 && value < M_PI_2;
+}
+
+Gcode createTackPoint(const Gcode &point, const Gcode &refrence) {
+
+	// Initialize variables
+	Gcode gcode;
+	uint32_t time = ceil(getDistance(point, refrence));
+	
+	// Check if time is greater than 5
+	if(time > 5) {
+	
+		// Set g-code to a delay command based on time
+		gcode.setValue('G', "4");
+		gcode.setValue('P', to_string(time));
+	}
+	
+	// Return gcode
+	return gcode;
+}
+
+bool basicPreparationPreprocessor() {
 
 	// Initialzie variables
 	string line;
+	Gcode gcode;
 	fstream processedFile(folderLocation + "/output.gcode", ios::in | ios::binary);
 	fstream temp(folderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
 	
@@ -806,7 +667,7 @@ bool preprocessFile() {
 	if(processedFile.good() && temp.good()) {
 	
 		// Add intro to temp
-		temp << "M106 S255" << endl;
+		temp << "M106 S" << (filament == PLA ? "255" : "50") << endl;
 		temp << "M17" << endl;
 		temp << "G90" << endl;
 		temp << "M104 S" << to_string(temperature) << endl;
@@ -821,56 +682,25 @@ bool preprocessFile() {
 		temp << "G92 E0" << endl;
 		temp << "G90" << endl;
 		temp << "G0 F2400" << endl;
+		temp << "; can extrude" << endl;
 	
 		// Go through processed file
 		while(processedFile.peek() != EOF) {
 	
 			// Read in line
 			getline(processedFile, line);
-			line.pop_back();
 			
-			// Remove leading white space
-			while(line[0] == ' ' || line[0] == '\t')
-				line.erase(0, 1);
+			// Pase line
+			gcode.parseLine(line);
 			
-			// Check if line begins layer 0
-			if(line == ";LAYER:0")
+			// Check if command controls extruder temperature or fan speed
+			if(gcode.hasValue('M') && (gcode.getValue('M') == "104" || gcode.getValue('M') == "106" || gcode.getValue('M') == "107" || gcode.getValue('M') == "109"))
 			
-				// Increase temperature
-				temp << "M109 S" << to_string(temperature + 10) << endl;
-				
-			// Otherwise check if line begins layer 1
-			else if(line == ";LAYER:1")
-			
-				// Descrease temperature
-				temp << "M109 S" << to_string(temperature) << endl;
-			
-			// Remove trailing comments
-			if(line[0] != ';' && line.find(";") != string::npos)
-				line.erase(line.find(";"));
-		
-			// Remove fan controls
-			if(line.length() >= 4 && (line.substr(0, 4) == "M106" || line.substr(0, 4) == "M107"))
-				continue;
-			
-			// Remove T commands
-			while(line[0] != ';' && line.find("T") != string::npos)
-				line.erase(line.find("T"), line.find(" ", line.find("T")) - line.find("T") + 1);
-			
-			// Remove not applicable commands
-			if(line.length() >= 3 && line.substr(0, 3) == "M82")
-				continue;
-			
-			// Remove trailing white space
-			while(line.back() == ' ' || line.back() == '\t')
-				line.pop_back();
-			
-			// Remove empty lines
-			if(!line.length())
+				// Get next line
 				continue;
 			
 			// Send line to temp
-			temp << line << endl;
+			temp << gcode << endl;
 		}
 	
 		// Add outro to temp
@@ -879,10 +709,342 @@ bool preprocessFile() {
 		temp << "G0 X5 Y5 F2000" << endl;
 		temp << "G0 E-8 F2000" << endl;
 		temp << "M104 S0" << endl;
-		temp << "G0 Z3 F2900" << endl;
-		temp << "G90" << endl;
-		temp << "G0 X95 Y95" << endl;
+		if(sizeZ > 60) {
+			if(sizeZ < 110)
+				temp << "G0 Z3 F2900" << endl;
+			temp << "G90" << endl;
+			temp << "G0 X90 Y84" << endl;
+		}
+		else {
+			temp << "G0 Z3 F2900" << endl;
+			temp << "G90" << endl;
+			temp << "G0 X95 Y95" << endl;
+		}
+		temp << "M107" << endl;
 		temp << "M18" << endl;
+		
+		// Transfer contents of temp to processed file
+		temp.clear();
+		temp.seekg(0, ios::beg);
+		processedFile.close();
+		processedFile.open(folderLocation + "/output.gcode", ios::out | ios::binary | ios::trunc);
+		processedFile << temp.rdbuf();
+		processedFile.close();
+		
+		// Delete temp
+		unlink((folderLocation + "/temp").c_str());
+		
+		// Return true
+		return true;
+	}
+	
+	// Return false
+	return false;
+}
+
+bool waveBondingPreprocessor() {
+
+	// Initialzie variables
+	string line;
+	Gcode gcode;
+	fstream processedFile(folderLocation + "/output.gcode", ios::in | ios::binary);
+	fstream temp(folderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
+	
+	// Check if temp file was opened successfully
+	if(processedFile.good() && temp.good()) {
+	
+		// Go through processed file
+		while(processedFile.peek() != EOF) {
+	
+			// Read in line
+			getline(processedFile, line);
+			
+			// Check if line was parsed successfully
+			gcode.parseLine(line);
+				
+			// Send line to temp
+			temp << gcode << endl;
+		}
+		
+		// Transfer contents of temp to processed file
+		temp.clear();
+		temp.seekg(0, ios::beg);
+		processedFile.close();
+		processedFile.open(folderLocation + "/output.gcode", ios::out | ios::binary | ios::trunc);
+		processedFile << temp.rdbuf();
+		processedFile.close();
+		
+		// Delete temp
+		unlink((folderLocation + "/temp").c_str());
+		
+		// Return true
+		return true;
+	}
+	
+	// Return false
+	return false;
+}
+
+bool thermalBondingPreprocessor() {
+
+	// Initialzie variables
+	string line;
+	Gcode gcode, previousGcode, refrenceGcode, tackPoint;
+	fstream processedFile(folderLocation + "/output.gcode", ios::in | ios::binary);
+	fstream temp(folderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
+	int layerCounter = 0, cornerCounter = 0;
+	bool flag = false;
+	bool relativeMode = false;
+	
+	// Check if temp file was opened successfully
+	if(processedFile.good() && temp.good()) {
+	
+		// Go through processed file
+		while(processedFile.peek() != EOF) {
+	
+			// Read in line
+			getline(processedFile, line);
+			
+			// Check if line is a layer commend
+			if(line.find(";LAYER:") != string::npos) {
+			
+				// Check if layerCounter is 0
+				if(!layerCounter) {
+				
+					// Send temperature command to temp
+					temp << "M109 S" << to_string(getBoundedTemperature(temperature + (filament == PLA ? 10 : 15))) << endl;
+					// Set flag
+					flag = true;
+				}
+				
+				// Otherwise check if layerCounter is one
+				else if(layerCounter == 1)
+				
+					// Send temperature command to temp
+					temp << "M109 S" << to_string(getBoundedTemperature(temperature + (filament == PLA ? 5 : 10))) << endl;
+				// Increment layer counter
+				layerCounter++;
+			}
+			
+			// Check if line is layer zero
+			if(line.find(";LAYER:0") != string::npos) {
+			
+				// Send temperature command to temp
+				temp << "M109 S" << to_string(temperature) << endl;
+				
+				// Clear flag
+				flag = false;
+			}
+			
+			// Check if line was parsed successfully and it's a G command and wave bonding is not being used
+			if(gcode.parseLine(line) && gcode.hasValue('G') && !useWaveBonding) {
+			
+				// Check what parameter is associated with the command
+				switch(stoi(gcode.getValue('G'))) {
+				
+					case 0:
+					case 1:
+					
+						// Check if previous command exists, the flag is set, and filament is ABS, HIPS, or PLA
+						if(!previousGcode.isEmpty() && flag && (filament == ABS || filament == HIPS || filament == PLA)) {
+							// Check if both counters are less than or equal to one
+							if(cornerCounter <= 1 && layerCounter <= 1) {
+							
+								// Check if sharp corner
+								if(isSharpCorner(gcode, previousGcode)) {
+								
+									// Check if refrence g-codes is set
+									if(refrenceGcode.isEmpty()) {
+									
+										// Check if a tack point was created
+										tackPoint = createTackPoint(gcode, previousGcode);
+										if(!tackPoint.isEmpty())
+										
+											// Send tack point to temp
+											temp << tackPoint << endl;
+									}
+									
+									// Set refrence g-code
+									refrenceGcode = gcode;
+									
+									// Increment corner count
+									cornerCounter++;
+								}
+						
+							}
+							
+							// Otherwise check if corner counter is greater than one but layer counter isn't and sharp corner
+							else if(cornerCounter >= 1 && layerCounter <= 1 && isSharpCorner(gcode, refrenceGcode)) {
+							
+								// Check if a tack point was created
+								tackPoint = createTackPoint(gcode, refrenceGcode);
+								if(!tackPoint.isEmpty())
+								
+									// Send tack point to temp
+									temp << tackPoint << endl;
+								
+								
+								// Set refrence g-code
+								refrenceGcode = gcode;
+							}
+						}
+					break;
+					
+					case 90:
+					
+						// Clear relative mode
+						relativeMode = false;
+					break;
+				
+					case 91:
+					
+						// Set relative mode
+						relativeMode = true;
+					break;
+				}
+			}
+			
+			// Set previous g-code
+			previousGcode = gcode;
+			
+			// Check if not using wave bonding, filament is ABS, command contains G and Z, and in absolute mode
+			if(!useWaveBonding && filament == ABS && gcode.hasValue('G') && gcode.hasValue('Z') && !relativeMode)
+				
+				// Adjust g-code to have Z lower by 0.1
+				gcode.setValue('Z', to_string(stod(gcode.getValue('Z')) - 0.1));
+			
+			// Send g-code to temp
+			temp << gcode << endl;
+		}
+		
+		// Transfer contents of temp to processed file
+		temp.clear();
+		temp.seekg(0, ios::beg);
+		processedFile.close();
+		processedFile.open(folderLocation + "/output.gcode", ios::out | ios::binary | ios::trunc);
+		processedFile << temp.rdbuf();
+		processedFile.close();
+		
+		// Delete temp
+		unlink((folderLocation + "/temp").c_str());
+		
+		// Return true
+		return true;
+	}
+	
+	// Return false
+	return false;
+}
+
+bool bedCompensationPreprocessor() {
+
+	// Initialzie variables
+	string line;
+	Gcode gcode;
+	fstream processedFile(folderLocation + "/output.gcode", ios::in | ios::binary);
+	fstream temp(folderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
+	
+	// Check if temp file was opened successfully
+	if(processedFile.good() && temp.good()) {
+	
+		// Go through processed file
+		while(processedFile.peek() != EOF) {
+	
+			// Read in line
+			getline(processedFile, line);
+			
+			// Check if line was parsed successfully
+			gcode.parseLine(line);
+				
+			// Send line to temp
+			temp << gcode << endl;
+		}
+		
+		// Transfer contents of temp to processed file
+		temp.clear();
+		temp.seekg(0, ios::beg);
+		processedFile.close();
+		processedFile.open(folderLocation + "/output.gcode", ios::out | ios::binary | ios::trunc);
+		processedFile << temp.rdbuf();
+		processedFile.close();
+		
+		// Delete temp
+		unlink((folderLocation + "/temp").c_str());
+		
+		// Return true
+		return true;
+	}
+	
+	// Return false
+	return false;
+}
+
+bool backlashCompensationPreprocessor() {
+
+	// Initialzie variables
+	string line;
+	Gcode gcode;
+	fstream processedFile(folderLocation + "/output.gcode", ios::in | ios::binary);
+	fstream temp(folderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
+	
+	// Check if temp file was opened successfully
+	if(processedFile.good() && temp.good()) {
+	
+		// Go through processed file
+		while(processedFile.peek() != EOF) {
+	
+			// Read in line
+			getline(processedFile, line);
+			
+			// Check if line was parsed successfully
+			gcode.parseLine(line);
+				
+			// Send line to temp
+			temp << gcode << endl;
+		}
+		
+		// Transfer contents of temp to processed file
+		temp.clear();
+		temp.seekg(0, ios::beg);
+		processedFile.close();
+		processedFile.open(folderLocation + "/output.gcode", ios::out | ios::binary | ios::trunc);
+		processedFile << temp.rdbuf();
+		processedFile.close();
+		
+		// Delete temp
+		unlink((folderLocation + "/temp").c_str());
+		
+		// Return true
+		return true;
+	}
+	
+	// Return false
+	return false;
+}
+
+bool feedRateConversionPreprocessor() {
+
+	// Initialzie variables
+	string line;
+	Gcode gcode;
+	fstream processedFile(folderLocation + "/output.gcode", ios::in | ios::binary);
+	fstream temp(folderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
+	
+	// Check if temp file was opened successfully
+	if(processedFile.good() && temp.good()) {
+	
+		// Go through processed file
+		while(processedFile.peek() != EOF) {
+	
+			// Read in line
+			getline(processedFile, line);
+			
+			// Check if line was parsed successfully
+			gcode.parseLine(line);
+				
+			// Send line to temp
+			temp << gcode << endl;
+		}
 		
 		// Transfer contents of temp to processed file
 		temp.clear();

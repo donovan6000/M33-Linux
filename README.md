@@ -15,6 +15,7 @@ The 90-m3d-local.rules needs to applied in order to avoid issues. You can apply 
 
 
 cp ./90-m3d-local.rules /etc/udev/rules.d/
+
 sudo /etc/init.d/udev restart
 
 

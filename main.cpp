@@ -1,38 +1,16 @@
 // Header files
 #include <iostream>
-#include <iomanip>
 #include <fstream>
 #include <cstring>
 #include <cmath>
 #include <unistd.h>
-#include <fcntl.h>
-#include <termios.h>
-
+#include "printer.h"
 #include "gcode.h"
 
 using namespace std;
 
 
-// Definitions
-enum filamentTypes {PLA, ABS, HIPS, OTHER};
-
-
 // Global variables
-int fd = -1;
-string firmwareVersion;
-string serialNumber;
-double backRightOffset;
-double backLeftOffset;
-double frontRightOffset;
-double frontLeftOffset;
-double bedHeightOffset;
-double backlashX;
-double backlashY;
-double backRightOrientation;
-double backLeftOrientation;
-double frontRightOrientation;
-double frontLeftOrientation;
-uint8_t status;
 string folderLocation;
 
 uint8_t temperature = 215;
@@ -48,30 +26,6 @@ bool useFeedRateConversion = false;
 
 
 // Function prototypes
-
-/*
-Name: Connect to printer
-Purpose: Connects to the printer
-*/
-bool connectToPrinter();
-
-/*
-Name: Send Data
-Purpose: Sends ASCII data to the device
-*/
-bool sendDataAscii(const char *data);
-
-/*
-Name: Send Data
-Purpose: Sends binary data to the device
-*/
-bool sendDataBinary(const char *data);
-
-/*
-Name: Get Response
-Purpose: Receives response from the device
-*/
-string getResponse();
 
 /*
 Name: Get Print Dimensions
@@ -123,8 +77,11 @@ int main(int argc, char *argv[]) {
 	string response, line;
 	fstream processedFile;
 	ifstream input;
-	char character;
 	uint64_t totalLines = 0, lineCounter = 0;
+	Printer printer;
+	
+	// Display version
+	cout << "M3D Linux V0.3" << endl;
 	
 	// Check if a file is provided
 	if(argc >= 2) {
@@ -140,97 +97,35 @@ int main(int argc, char *argv[]) {
 	}
 	
 	// Wait for device to be connected
-	while(!connectToPrinter()) {
+	while(!printer.connect())
 		cout << "M3D not detected" << endl;
-		usleep(500000);
-	}
 	
 	// Display message
 	cout << "Connected to M3D" << endl;
 	cout << "Initializing the device" << endl;
 	
-	// Put device into firmware mode
-	while(1) {
-		sendDataAscii("M115");
-		while(read(fd, &character, 1) == -1);
-		if(character == 'e')
-			break;
-		sendDataAscii("Q");
-		while(!connectToPrinter());
-		usleep(50000);
+	// Check if printer's firmware isn't valid
+	if(!printer.isFirmwareValid()) {
+	
+		// Display error
+		cout << "Printer firmware is corrupt" << endl << "Updating firmware" << endl;
+		
+		// Check if updating printer's firmware failed
+		if(!printer.updateFirmware("test.rom")) {
+		
+			// Display error
+			cout << "Failed to update firmware" << endl;
+			return 0;
+		}
 	}
 	
-	// Get device info
-	sendDataBinary("M115");
-	response = getResponse();
+	// Check if collect printer information failed
+	if(!printer.collectInformation()) {
 	
-	// Set firmware and serial number 
-	firmwareVersion = response.substr(response.find("FIRMWARE_VERSION:") + 17, response.find(" ", response.find("FIRMWARE_VERSION:")) - response.find("FIRMWARE_VERSION:") - 17);
-	serialNumber = response.substr(response.find("SERIAL_NUMBER:") + 14);
-	
-	// Get bed offsets
-	sendDataBinary("M578");
-	response = getResponse();
-	
-	// Set bed offsets
-	backRightOffset = stod(response.substr(response.find("BRO:") + 4, response.find(" ", response.find("BRO:")) - response.find("BRO:") - 4));
-	backLeftOffset = stod(response.substr(response.find("BLO:") + 4, response.find(" ", response.find("BLO:")) - response.find("BLO:") - 4));
-	frontRightOffset = stod(response.substr(response.find("FRO:") + 4, response.find(" ", response.find("FRO:")) - response.find("FRO:") - 4));
-	frontLeftOffset = stod(response.substr(response.find("FLO:") + 4, response.find(" ", response.find("FLO:")) - response.find("FLO:") - 4));
-	bedHeightOffset = stod(response.substr(response.find("ZO:") + 3));
-
-	// Get backlash
-	sendDataBinary("M572");
-	response = getResponse();
-	
-	// Set backlash values
-	backlashX = stod(response.substr(response.find("BX:") + 3, response.find(" ", response.find("BX:")) - response.find("BX:") - 3));
-	backlashY = stod(response.substr(response.find("BY:") + 3));
-	
-	// Get bed orientation
-	sendDataBinary("M573");
-	response = getResponse();
-	
-	// Set bed orientation
-	backRightOrientation = stod(response.substr(response.find("BR:") + 3, response.find(" ", response.find("BR:")) - response.find("BR:") - 3));
-	backLeftOrientation = stod(response.substr(response.find("BL:") + 3, response.find(" ", response.find("BL:")) - response.find("BL:") - 3));
-	frontLeftOrientation = stod(response.substr(response.find("FL:") + 3, response.find(" ", response.find("FL:")) - response.find("FL:") - 3));
-	frontRightOrientation = stod(response.substr(response.find("FR:") + 3));
-	
-	// Get status
-	sendDataBinary("M117");
-	response = getResponse();
-	
-	// Set status
-	status = stod(response.substr(response.find("S:") + 2));
-	
-	// Display device information
-	cout << endl << "Firmware: " << firmwareVersion << endl;
-	cout << "Serial Number: " << serialNumber << ' ';
-	if(serialNumber.substr(0, 2) == "BK")
-		cout << "Black";
-	else if(serialNumber.substr(0, 2) == "SL")
-		cout << "Silver";
-	else if(serialNumber.substr(0, 2)  == "BL")
-		cout << "Blue";
-	else if(serialNumber.substr(0, 2) == "GR")
-		cout << "Green";
-	else if(serialNumber.substr(0, 2) == "OR")
-		cout << "Orange";
-	cout << endl << "Back Right Offset: " << fixed << setprecision(4) << backRightOffset << endl;
-	cout << "Back Left Offset: " << backLeftOffset << endl;
-	cout << "Front Right Offset: " << frontRightOffset << endl;
-	cout << "Front Left Offset: " << frontLeftOffset << endl;
-	cout << "Bed Height Offset: " << bedHeightOffset << endl;
-	cout << "Backlash X: " << backlashX << endl;
-	cout << "Backlash Y: " << backlashY << endl;
-	cout << "Back Right Orientation: " << backRightOrientation << endl;
-	cout << "Back Left Orientation: " << backLeftOrientation << endl;
-	cout << "Front Right Orientation: " << frontRightOrientation << endl;
-	cout << "Front left Orientation: " << frontLeftOrientation << endl;
-	cout << "Status: 0x" << hex << uppercase << static_cast<unsigned int>(status) << endl;
-	cout << "Z Calibration Valid: " << (status & 0x02 ? "Yes" : "No") << endl;
-	cout << endl << "Device is ready" << endl;
+		// Display error
+		cout << "Failed to collect printer information" << endl;
+		return 0;
+	}
 	
 	// Check if a file was provided
 	if(argc >= 2) {
@@ -302,7 +197,7 @@ int main(int argc, char *argv[]) {
 				do {
 					
 					// Get next command if line didn't contain valid g-code
-					if(!sendDataBinary(line.c_str())) {
+					if(!printer.sendRequest(line)) {
 					
 						cout << "Failed to parse " << line << endl << endl;
 						break;
@@ -312,9 +207,9 @@ int main(int argc, char *argv[]) {
 					cout << "Send: " << line << endl;
 					
 					// Get valid response
-					response = getResponse();
+					response = printer.receiveResponse();
 					if(line.substr(0, 2) == "G0" && response == "Info:Too small")
-						response = getResponse();
+						response = printer.receiveResponse();
 					
 					// Display response
 					cout << "Receive: " << response << endl << endl;
@@ -356,7 +251,7 @@ int main(int argc, char *argv[]) {
 			do {
 				
 				// Get next command if line didn't contain valid g-code
-				if(!sendDataBinary(line.c_str())) {
+				if(!printer.sendRequest(line)) {
 				
 					cout << "Failed to parse command" << endl << endl;
 					break;
@@ -366,9 +261,9 @@ int main(int argc, char *argv[]) {
 				cout << "Send: " << line << endl;
 				
 				// Get valid response
-				response = getResponse();
+				response = printer.receiveResponse();
 				if(line.substr(0, 2) == "G0" && response == "Info:Too small")
-					response = getResponse();
+					response = printer.receiveResponse();
 				
 				// Display response
 				cout << "Receive: " << response << endl << endl;
@@ -376,105 +271,12 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	
-	// Close file descriptor
-	close(fd);
-	
 	// Return 0
 	return 0;
 }
 
 
 // Supporting function implementation
-bool connectToPrinter() {
-
-	// Initialize variables
-        termios settings;
-        
-        // Close file descriptor if open
-        if(fd != -1)
-        	close(fd);
-        
-        // Check if opening device was successful
-	if((fd = open("/dev/micro_m3d", O_RDWR | O_NONBLOCK)) != -1) {
-      
-		// Set serial protocol to 8n1 with 921600 baud rate
-		memset(&settings, 0, sizeof(settings));
-		settings.c_iflag = 0;
-		settings.c_oflag = 0;
-		settings.c_cflag= CS8 | CREAD | CLOCAL;
-		settings.c_lflag = 0;
-		settings.c_cc[VMIN] = 1;
-		settings.c_cc[VTIME] = 5;
-		cfsetospeed(&settings, B921600);
-		cfsetispeed(&settings, B921600);
-
-		// Apply settings
-		tcsetattr(fd, TCSAFLUSH, &settings);
-		tcdrain(fd);
-
-		// Return true
-		return true;
-	}
-	
-	// Return false
-	return false;
-}
-
-bool sendDataAscii(const char *data) {
-
-	// Initialize variables
-	bool returnValue;
-
-	// Send data to the device
-	tcflush(fd, TCIOFLUSH);
-	returnValue = write(fd, data, strlen(data)) != -1;
-	tcdrain(fd);
-	
-	// Return value
-	return returnValue;
-}
-
-bool sendDataBinary(const char *data) {
-
-	// Initialize variables
-	bool returnValue;
-	Gcode gcode;
-	
-	// Check if line was successfully parsed
-	if(gcode.parseLine(data)) {
-	
-		// Send binary request to the device
-		tcflush(fd, TCIOFLUSH);
-		returnValue = write(fd, gcode.getBinary().data(), gcode.getBinary().size()) != -1;
-		tcdrain(fd);
-		
-		// Return value
-		return returnValue;
-	}
-	
-	// Return false
-	return false;
-}
-
-string getResponse() {
-
-	// Initialize variables
-	string response;
-	char character;
-	
-	// Get response
-	do {
-		while(read(fd, &character, 1) == -1);
-		response.push_back(character);
-	} while(character != '\n');
-	
-	// Remove newline character from response
-	response.pop_back();
-	
-	// Return response
-	return response;
-}
-
 bool getPrintDimensions() {
 
 	// Initialize variables

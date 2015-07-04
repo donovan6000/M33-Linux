@@ -353,7 +353,7 @@ vector<uint8_t> Gcode::getBinary() const {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[3]);
-			tempPointer = (int32_t*)&tempFloat;
+			tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
 			request.push_back(*tempPointer & 0xFF);
 			request.push_back((*tempPointer >> 8) & 0xFF);
 			request.push_back((*tempPointer >> 16) & 0xFF);
@@ -365,7 +365,7 @@ vector<uint8_t> Gcode::getBinary() const {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[4]);
-			tempPointer = (int32_t*)&tempFloat;
+			tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
 			request.push_back(*tempPointer & 0xFF);
 			request.push_back((*tempPointer >> 8) & 0xFF);
 			request.push_back((*tempPointer >> 16) & 0xFF);
@@ -377,7 +377,7 @@ vector<uint8_t> Gcode::getBinary() const {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[5]);
-			tempPointer = (int32_t*)&tempFloat;
+			tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
 			request.push_back(*tempPointer & 0xFF);
 			request.push_back((*tempPointer >> 8) & 0xFF);
 			request.push_back((*tempPointer >> 16) & 0xFF);
@@ -389,7 +389,7 @@ vector<uint8_t> Gcode::getBinary() const {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[6]);
-			tempPointer = (int32_t*)&tempFloat;
+			tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
 			request.push_back(*tempPointer & 0xFF);
 			request.push_back((*tempPointer >> 8) & 0xFF);
 			request.push_back((*tempPointer >> 16) & 0xFF);
@@ -401,7 +401,7 @@ vector<uint8_t> Gcode::getBinary() const {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[7]);
-			tempPointer = (int32_t*)&tempFloat;
+			tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
 			request.push_back(*tempPointer & 0xFF);
 			request.push_back((*tempPointer >> 8) & 0xFF);
 			request.push_back((*tempPointer >> 16) & 0xFF);
@@ -443,7 +443,7 @@ vector<uint8_t> Gcode::getBinary() const {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[11]);
-			tempPointer = (int32_t*)&tempFloat;
+			tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
 			request.push_back(*tempPointer & 0xFF);
 			request.push_back((*tempPointer >> 8) & 0xFF);
 			request.push_back((*tempPointer >> 16) & 0xFF);
@@ -455,7 +455,7 @@ vector<uint8_t> Gcode::getBinary() const {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[12]);
-			tempPointer = (int32_t*)&tempFloat;
+			tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
 			request.push_back(*tempPointer & 0xFF);
 			request.push_back((*tempPointer >> 8) & 0xFF);
 			request.push_back((*tempPointer >> 16) & 0xFF);
@@ -467,7 +467,7 @@ vector<uint8_t> Gcode::getBinary() const {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[13]);
-			tempPointer = (int32_t*)&tempFloat;
+			tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
 			request.push_back(*tempPointer & 0xFF);
 			request.push_back((*tempPointer >> 8) & 0xFF);
 			request.push_back((*tempPointer >> 16) & 0xFF);
@@ -479,7 +479,7 @@ vector<uint8_t> Gcode::getBinary() const {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[14]);
-			tempPointer = (int32_t*)&tempFloat;
+			tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
 			request.push_back(*tempPointer & 0xFF);
 			request.push_back((*tempPointer >> 8) & 0xFF);
 			request.push_back((*tempPointer >> 16) & 0xFF);

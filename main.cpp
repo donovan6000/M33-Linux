@@ -3,6 +3,7 @@
 #include <fstream>
 #include <cstring>
 #include <cmath>
+#include <cfloat>
 #include <unistd.h>
 #include "printer.h"
 #include "gcode.h"
@@ -11,11 +12,17 @@ using namespace std;
 
 
 // Global variables
+Printer printer;
 string folderLocation;
 
 uint8_t temperature = 215;
 filamentTypes filament = PLA;
-double sizeX, sizeY, sizeZ;
+
+double minXModel = DBL_MAX, minYModel = DBL_MAX, minZModel = DBL_MAX;
+double maxXModel = 0, maxYModel = 0, maxZModel = 0;
+double minXExtruder = DBL_MAX, minYExtruder = DBL_MAX, minZExtruder = DBL_MAX;
+double maxXExtruder = 0, maxYExtruder = 0, maxZExtruder = 0;
+double minFeedRate = 0, maxFeedRate = DBL_MAX;
 
 bool useBasicPreparation = false;
 bool useWaveBonding = false;
@@ -24,14 +31,19 @@ bool useBedCompensation = false;
 bool useBacklashCompensation = false;
 bool useFeedRateConversion = false;
 
+#define WAVE_PERIOD_QUARTER 1.25
+#define WAVE_SIZE 0.15;
+
+enum printTiers {LOW, MEDIUM, HIGH};
+
 
 // Function prototypes
 
 /*
 Name: Get Print Dimensions
-Purpose: Calculates max X, Y, and Z sizes of the print
+Purpose: Calculates X, Y, and Z dimensions of the model and where the extruder moves
 */
-bool getPrintDimensions();
+bool getPrintInformation();
 
 /*
 Name: Basic Preparation Preprocessor
@@ -78,10 +90,9 @@ int main(int argc, char *argv[]) {
 	fstream processedFile;
 	ifstream input;
 	uint64_t totalLines = 0, lineCounter = 0;
-	Printer printer;
 	
 	// Display version
-	cout << "M3D Linux V0.3" << endl;
+	cout << "M3D Linux V0.4" << endl;
 	
 	// Check if a file is provided
 	if(argc >= 2) {
@@ -111,7 +122,7 @@ int main(int argc, char *argv[]) {
 		cout << "Printer firmware is corrupt" << endl << "Updating firmware" << endl;
 		
 		// Check if updating printer's firmware failed
-		if(!printer.updateFirmware("test.rom")) {
+		if(!printer.updateFirmware("2015062401.rom")) {
 		
 			// Display error
 			cout << "Failed to update firmware" << endl;
@@ -145,7 +156,7 @@ int main(int argc, char *argv[]) {
 			processedFile.close();
 
 			// Get print dimensions
-			getPrintDimensions();
+			getPrintInformation();
 			
 			// Use preparation preprocessor if set
 			if(useBasicPreparation)
@@ -277,17 +288,15 @@ int main(int argc, char *argv[]) {
 
 
 // Supporting function implementation
-bool getPrintDimensions() {
+bool getPrintInformation() {
 
 	// Initialize variables
 	string line;
 	Gcode gcode;
 	fstream file(folderLocation + "/output.gcode", ios::in | ios::binary);
-	double minX = 10000, maxX = 0;
-	double minY = 10000, maxY = 0;
-	double minZ = 10000, maxZ = 0;
-	double localX = 0, localY = 0, localZ = 0, localE = 0, commandX, commandY, commandZ, commandE;
+	double localX = 54, localY = 60, localZ = 0, localE = 0, commandX, commandY, commandZ, commandE, commandF;
 	bool relativeMode = false, positiveExtrusion;
+	printTiers tier = LOW;
 	
 	// Check if file was opened successfully
 	if(file.good()) {
@@ -310,13 +319,13 @@ bool getPrintDimensions() {
 						// Clear positive extruding
 						positiveExtrusion = false;
 						
-						// Check if extruding
+						// Check if command has an E value
 						if(gcode.hasValue('E')) {
 						
 							// Get E value of the command
 							commandE = stod(gcode.getValue('E'));
 							
-							// Set positive extrusion based on adjusted extrusion value
+							// Set positive extrusion based on adjusted E value
 							if(relativeMode) {
 								positiveExtrusion = commandE > 0;
 								localE += commandE;
@@ -328,17 +337,36 @@ bool getPrintDimensions() {
 							}
 						}
 						
+						// Check if command has a F value
+						if(gcode.hasValue('F')) {
+						
+							// Get F value of the command
+							commandF = stod(gcode.getValue('F'));
+						
+							// Update minimum and maximum feed rate values
+							minFeedRate = minFeedRate < commandF ? minFeedRate : commandF;
+							maxFeedRate = maxFeedRate > commandF ? maxFeedRate : commandF;
+						}
+						
 						// Check if positive extruding
 						if(positiveExtrusion) {
 						
-							// Set minimums and maximums
-							minX = minX < localX ? minX : localX;
-							maxX = maxX > localX ? maxX : localX;
-							minY = minY < localY ? minY : localY;
-							maxY = maxY > localY ? maxY : localY;
-							minZ = minZ < localZ ? minZ : localZ;
-							maxZ = maxZ > localZ ? maxZ : localZ;
+							// Update minimums and maximums dimensions of the model
+							minXModel = minXModel < localX ? minXModel : localX;
+							maxXModel = maxXModel > localX ? maxXModel : localX;
+							minYModel = minYModel < localY ? minYModel : localY;
+							maxYModel = maxYModel > localY ? maxYModel : localY;
+							minZModel = minZModel < localZ ? minZModel : localZ;
+							maxZModel = maxZModel > localZ ? maxZModel : localZ;
 						}
+						
+						// Update minimums and maximums dimensions of extruder
+						minXExtruder = minXExtruder < localX ? minXExtruder : localX;
+						maxXExtruder = maxXExtruder > localX ? maxXExtruder : localX;
+						minYExtruder = minYExtruder < localY ? minYExtruder : localY;
+						maxYExtruder = maxYExtruder > localY ? maxYExtruder : localY;
+						minZExtruder = minZExtruder < localZ ? minZExtruder : localZ;
+						maxZExtruder = maxZExtruder > localZ ? maxZExtruder : localZ;
 						
 						// Check if command has an X value
 						if(gcode.hasValue('X')) {
@@ -368,20 +396,65 @@ bool getPrintDimensions() {
 							
 							// Set local Z
 							localZ = relativeMode ? localZ + commandZ : commandZ;
+							
+							// Check if Z is out of bounds
+							if(localZ < BED_LOW_MIN_Z || localZ > BED_HIGH_MAX_Z)
+							
+								// Return false
+								return false;
+							
+							// Set print tier
+							if(localZ >= BED_LOW_MIN_Z && localZ < BED_LOW_MAX_Z)
+								tier = LOW;
+								
+							else if(localZ >= BED_LOW_MIN_Z && localZ < BED_MEDIUM_MAX_Z)
+								tier = MEDIUM;
+								
+							else if(localZ >= BED_HIGH_MIN_Z && localZ <= BED_HIGH_MAX_Z)
+								tier = HIGH;
+							
+						}
+						
+						// Return false if X or Y are out of bounds				
+						switch(tier) {
+							case LOW:
+							
+								if(localX < BED_LOW_MIN_X || localX > BED_LOW_MAX_X || localY < BED_LOW_MIN_Y || localY > BED_LOW_MAX_Y)
+									return false;
+							break;
+							
+							case MEDIUM:
+							
+								if(localX < BED_MEDIUM_MIN_X || localX > BED_MEDIUM_MAX_X || localY < BED_MEDIUM_MIN_Y || localY > BED_MEDIUM_MAX_Y)
+									return false;
+							break;
+
+							case HIGH:
+							
+								if(localX < BED_HIGH_MIN_X || localX > BED_HIGH_MAX_X || localY < BED_HIGH_MIN_Y || localY > BED_HIGH_MAX_Y)
+									return false;
+							break;
 						}
 						
 						// Check if positive extruding
 						if(positiveExtrusion) {
 						
-							// Set minimums and maximums
-							minX = minX < localX ? minX : localX;
-							maxX = maxX > localX ? maxX : localX;
-							minY = minY < localY ? minY : localY;
-							maxY = maxY > localY ? maxY : localY;
-							minZ = minZ < localZ ? minZ : localZ;
-							maxZ = maxZ > localZ ? maxZ : localZ;
+							// Update minimums and maximums dimensions of the model
+							minXModel = minXModel < localX ? minXModel : localX;
+							maxXModel = maxXModel > localX ? maxXModel : localX;
+							minYModel = minYModel < localY ? minYModel : localY;
+							maxYModel = maxYModel > localY ? maxYModel : localY;
+							minZModel = minZModel < localZ ? minZModel : localZ;
+							maxZModel = maxZModel > localZ ? maxZModel : localZ;
 						}
-					
+						
+						// Update minimums and maximums dimensions of extruder
+						minXExtruder = minXExtruder < localX ? minXExtruder : localX;
+						maxXExtruder = maxXExtruder > localX ? maxXExtruder : localX;
+						minYExtruder = minYExtruder < localY ? minYExtruder : localY;
+						maxYExtruder = maxYExtruder > localY ? maxYExtruder : localY;
+						minZExtruder = minZExtruder < localZ ? minZExtruder : localZ;
+						maxZExtruder = maxZExtruder > localZ ? maxZExtruder : localZ;
 					break;
 					
 					case 90:
@@ -399,10 +472,7 @@ bool getPrintDimensions() {
 			}
 		}
 		
-		// Set X, Y, and Z sizes of the print
-		sizeX = maxX - minX;
-		sizeY = maxY - minY;
-		sizeZ = maxZ - minZ;
+		// Return if print doesn't go out of bounds
 		
 		// Return true
 		return true;
@@ -424,21 +494,6 @@ double getDistance(const Gcode &firstPoint, const Gcode &secondPoint) {
 	return sqrt(pow(stod(firstPoint.getValue('X')) - stod(secondPoint.getValue('X')), 2) + pow(stod(firstPoint.getValue('Y')) - stod(secondPoint.getValue('Y')), 2));
 }
 
-bool isSharpCorner(const Gcode &point, const Gcode &refrence) {
-
-	// Initialize variables
-	double currentX = stod(point.getValue('X'));
-	double currentY = stod(point.getValue('Y'));
-	double previousX = stod(refrence.getValue('X'));
-	double previousY = stod(refrence.getValue('Y'));
-	
-	// Calculate value
-	double value = acos((currentX * previousX + currentY * previousY) / (pow(currentX * currentX + currentY * currentY, 2) * pow(previousX * previousX + previousY * previousY, 2)));
-	
-	// Return if sharp corner
-	return value > 0 && value < M_PI_2;
-}
-
 Gcode createTackPoint(const Gcode &point, const Gcode &refrence) {
 
 	// Initialize variables
@@ -455,6 +510,72 @@ Gcode createTackPoint(const Gcode &point, const Gcode &refrence) {
 	
 	// Return gcode
 	return gcode;
+}
+
+bool isSharpCornerForThermalBonding(const Gcode &point, const Gcode &refrence) {
+
+	// Initialize variables
+	double currentX = stod(point.getValue('X'));
+	double currentY = stod(point.getValue('Y'));
+	double previousX = stod(refrence.getValue('X'));
+	double previousY = stod(refrence.getValue('Y'));
+	
+	// Calculate value
+	double value = acos((currentX * previousX + currentY * previousY) / (pow(currentX * currentX + currentY * currentY, 2) * pow(previousX * previousX + previousY * previousY, 2)));
+	
+	// Return if sharp corner
+	return value > 0 && value < M_PI_2;
+}
+
+bool isSharpCornerForWaveBonding(const Gcode &point, const Gcode &refrence) {
+
+	// Initialize variables
+	double currentX = stod(point.getValue('X'));
+	double currentY = stod(point.getValue('Y'));
+	double previousX = stod(refrence.getValue('X'));
+	double previousY = stod(refrence.getValue('Y'));
+	
+	// Calculate value
+	double value = acos((currentX * previousX + currentY + previousY) / (pow(currentX * currentX + currentY + currentY, 2) * pow(previousX * previousX + previousY + previousY, 2)));
+	
+	// Return if sharp corner
+	return value > 0 && value < M_PI_2;
+}
+
+/*void ProcessForTackPoints(GCodeWriter output_writer, const GCode &point, const GCode &refrence, GCode &lastTackPoint, int cornercount) {
+
+	// Initialize variables
+	Gcode tackPoint;
+	if(cornercount <= 1 && isSharpCornerForWave(point, refrence)) {
+		if(lastTackPoint.empty()) {
+			tackPoint = createTackPoint(point, refrence);
+			if(!tackPoint.empty())
+				temp << tackPoint << endl; 
+		}
+		lastTackPoint = point;
+		cornercount++;
+	}
+	else if(cornercount >= 1 && isSharpCornerForWave(point, lastTackPoint)) {
+		tackPoint = createTackPoint(point, lastTackPoint);
+		if(!tackPoint.empty())
+			temp << tackPoint << endl; 
+		lastTackPoint = point;
+	}
+}*/
+
+float getCurrentAdjustmentZ() {
+
+	// Initialize variables
+	static uint8_t waveStep = 0;
+
+	// Set adjustment
+	float adjustment = waveStep ? waveStep != 2 ? 0 : -1.5 : 1;
+	
+	// Increment wave step
+	waveStep = (waveStep + 1) % 4;
+	
+	// Return adjustment
+	return adjustment * WAVE_SIZE;
 }
 
 bool basicPreparationPreprocessor() {
@@ -484,7 +605,6 @@ bool basicPreparationPreprocessor() {
 		temp << "G92 E0" << endl;
 		temp << "G90" << endl;
 		temp << "G0 F2400" << endl;
-		temp << "; can extrude" << endl;
 	
 		// Go through processed file
 		while(processedFile.peek() != EOF) {
@@ -511,8 +631,8 @@ bool basicPreparationPreprocessor() {
 		temp << "G0 X5 Y5 F2000" << endl;
 		temp << "G0 E-8 F2000" << endl;
 		temp << "M104 S0" << endl;
-		if(sizeZ > 60) {
-			if(sizeZ < 110)
+		if(maxZExtruder > 60) {
+			if(maxZExtruder < 110)
 				temp << "G0 Z3 F2900" << endl;
 			temp << "G90" << endl;
 			temp << "G0 X90 Y84" << endl;
@@ -522,8 +642,8 @@ bool basicPreparationPreprocessor() {
 			temp << "G90" << endl;
 			temp << "G0 X95 Y95" << endl;
 		}
-		temp << "M107" << endl;
 		temp << "M18" << endl;
+		temp << "M107" << endl;
 		
 		// Transfer contents of temp to processed file
 		temp.clear();
@@ -548,9 +668,16 @@ bool waveBondingPreprocessor() {
 
 	// Initialzie variables
 	string line;
-	Gcode gcode;
+	Gcode gcode, previousGcode, refrenceGcode, tackPoint;
 	fstream processedFile(folderLocation + "/output.gcode", ios::in | ios::binary);
 	fstream temp(folderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
+	int num = 0;
+	bool relativeMode = true;
+	bool flag2 = true;
+	bool flag3 = false;
+	//Position position = new Position();
+	float num5 = 0;
+	int cornercount = 0;
 	
 	// Check if temp file was opened successfully
 	if(processedFile.good() && temp.good()) {
@@ -561,8 +688,136 @@ bool waveBondingPreprocessor() {
 			// Read in line
 			getline(processedFile, line);
 			
-			// Check if line was parsed successfully
-			gcode.parseLine(line);
+			// Check if line is a layer command
+			if(line.find(";LAYER:") != string::npos) {
+				int num7 = stoi(line.substr(7));
+				if (num7 < num)
+				num = num7;
+				flag2 = num7 == num;
+			}
+			
+			if(gcode.parseLine(line) && (gcode.getValue('G') == "0" || gcode.getValue('G') == "1") && !relativeMode) {
+				/*if (currLine.hasX || currLine.hasY)
+					flag3 = true;
+				if (currLine.hasZ && flag2)
+					currLine.Z += -0.1f;
+					
+				float num8 = !currLine.hasX ? 0f : (currLine.X - position.relativeX);
+				float num9 = !currLine.hasY ? 0f : (currLine.Y - position.relativeY);
+				float num10 = !currLine.hasZ ? 0f : (currLine.Z - position.relativeZ);
+				float num11 = !currLine.hasE ? 0f : (currLine.E - position.relativeE);
+				position.absoluteX += num8;
+				position.absoluteY += num9;
+				position.absoluteZ += num10;
+				position.absoluteE += num11;
+				position.relativeX += num8;
+				position.relativeY += num9;
+				position.relativeZ += num10;
+				position.relativeE += num11;
+				if (currLine.hasF)
+					position.F = currLine.F;
+				float num12 = (float) Math.Sqrt((double) ((num8 * num8) + (num9 * num9)));
+				int num13 = 1;
+				if (num12 > WAVE_PERIOD_QUARTER)
+					num13 = (int) (num12 / WAVE_PERIOD_QUARTER);
+				float num14 = position.absoluteX - num8;
+				float num15 = position.absoluteY - num9;
+				float num16 = position.relativeX - num8;
+				float num17 = position.relativeY - num9;
+				float num18 = position.relativeZ - num10;
+				float num19 = position.relativeE - num11;
+				float num20 = num8 / num12;
+				float num21 = num9 / num12;
+				float num22 = num10 / num12;
+				float num23 = num11 / num12;
+				if (flag2 && (num11 > 0f)) {
+					if (prevLine != null)
+						this.ProcessForTackPoints(output_writer, currLine, prevLine, ref code3, ref cornercount);
+					for (int i = 1; i < (num13 + 1); i++) {
+						float relativeX;
+						float relativeY;
+						float relativeZ;
+						float relativeE;
+						if (i == num13) {
+							float absoluteX = position.absoluteX;
+							float absoluteY = position.absoluteY;
+							relativeX = position.relativeX;
+							relativeY = position.relativeY;
+							relativeZ = position.relativeZ;
+							relativeE = position.relativeE;
+						}
+						else {
+							relativeX = num16 + ((i * WAVE_PERIOD_QUARTER) * num20);
+							relativeY = num17 + ((i * WAVE_PERIOD_QUARTER) * num21);
+							relativeZ = num18 + ((i * WAVE_PERIOD_QUARTER) * num22);
+							relativeE = num19 + ((i * WAVE_PERIOD_QUARTER) * num23);
+						}
+						float num29 = relativeE - num5;
+						if (i != num13) {
+							GCode code = new GCode {
+								G = currLine.G
+							};
+							if (currLine.hasX)
+								code.X = (position.relativeX - num8) + (relativeX - num16);
+							if (currLine.hasY)
+								code.Y = (position.relativeY - num9) + (relativeY - num17);
+							if (flag3)
+								code.Z = ((position.relativeZ - num10) + (relativeZ - num18)) + this.CurrentAdjustmentsZ;
+							else if (currLine.hasZ && ((num10 > float.Epsilon) || (num10 < -1.401298E-45f)))
+								code.Z = (position.relativeZ - num10) + (relativeZ - num18);
+						
+							code.E = ((position.relativeE - num11) + (relativeE - num19));
+							output_writer.Write(code);
+						}
+						else {
+							if (flag3) {
+								if (currLine.hasZ)
+									currLine.Z += this.CurrentAdjustmentsZ;
+								else
+									currLine.Z = (num18 + num10) + this.CurrentAdjustmentsZ;
+							}
+						}
+						num5 = relativeE;
+					}
+				}*/
+				
+				// Set previous gcode
+				previousGcode = gcode;
+			}
+			
+			// Otherwise check if command is G90
+			else if(gcode.getValue('G') == "90")
+				
+				// Clear relative mode
+				relativeMode = false;
+			
+			// Otherwise check if command is G91
+			else if(gcode.getValue('G') == "91")
+				
+				// Set relative mode
+				relativeMode = true;
+			
+			// Otherwise check if command is G92
+			else if(gcode.getValue('G') == "92") {
+			
+				// Check if line doesn't contain an X, Y, Z, and E
+				if(!gcode.hasValue('X') && !gcode.hasValue('Y') && !gcode.hasValue('Z') && !gcode.hasValue('E')) {
+				
+					// Set values to zero
+					gcode.setValue('X', "0");
+					gcode.setValue('Y', "0");
+					gcode.setValue('Z', "0");
+					gcode.setValue('E', "0");
+				}
+				
+				// Otherwise
+				else {
+					/*position.relativeX = !gcode.hasValue('X') ? position.relativeX : gcode.getValue('X');
+					position.relativeY = !gcode.hasValue('Y') ? position.relativeY : gcode.getValue('Y');
+					position.relativeZ = !gcode.hasValue('Z') ? position.relativeZ : gcode.getValue('Z');
+					position.relativeE = !gcode.hasValue('E') ? position.relativeE : gcode.getValue('E');*/
+				}
+			}
 				
 			// Send line to temp
 			temp << gcode << endl;
@@ -595,7 +850,7 @@ bool thermalBondingPreprocessor() {
 	fstream processedFile(folderLocation + "/output.gcode", ios::in | ios::binary);
 	fstream temp(folderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
 	int layerCounter = 0, cornerCounter = 0;
-	bool flag = false;
+	bool checkSharpCorner = false;
 	bool relativeMode = false;
 	
 	// Check if temp file was opened successfully
@@ -607,23 +862,29 @@ bool thermalBondingPreprocessor() {
 			// Read in line
 			getline(processedFile, line);
 			
-			// Check if line is a layer commend
+			// Check if line is a layer command
 			if(line.find(";LAYER:") != string::npos) {
 			
-				// Check if layerCounter is 0
-				if(!layerCounter) {
+				// Check how many layers have been processed
+				switch(layerCounter) {
+			
+					// Check if layer counter is zero
+					case 0:
 				
-					// Send temperature command to temp
-					temp << "M109 S" << to_string(getBoundedTemperature(temperature + (filament == PLA ? 10 : 15))) << endl;
-					// Set flag
-					flag = true;
+						// Send temperature command to temp
+						temp << "M109 S" << to_string(getBoundedTemperature(temperature + (filament == PLA ? 10 : 15))) << endl;
+						// Set check sharp corner
+						checkSharpCorner = true;
+					break;
+				
+					// Otherwise check if layer counter is one
+					case 1:
+				
+						// Send temperature command to temp
+						temp << "M109 S" << to_string(getBoundedTemperature(temperature + (filament == PLA ? 5 : 10))) << endl;
+					break;
 				}
 				
-				// Otherwise check if layerCounter is one
-				else if(layerCounter == 1)
-				
-					// Send temperature command to temp
-					temp << "M109 S" << to_string(getBoundedTemperature(temperature + (filament == PLA ? 5 : 10))) << endl;
 				// Increment layer counter
 				layerCounter++;
 			}
@@ -634,8 +895,8 @@ bool thermalBondingPreprocessor() {
 				// Send temperature command to temp
 				temp << "M109 S" << to_string(temperature) << endl;
 				
-				// Clear flag
-				flag = false;
+				// Clear check sharp corner
+				checkSharpCorner = false;
 			}
 			
 			// Check if line was parsed successfully and it's a G command and wave bonding is not being used
@@ -647,13 +908,13 @@ bool thermalBondingPreprocessor() {
 					case 0:
 					case 1:
 					
-						// Check if previous command exists, the flag is set, and filament is ABS, HIPS, or PLA
-						if(!previousGcode.isEmpty() && flag && (filament == ABS || filament == HIPS || filament == PLA)) {
+						// Check if previous command exists, the check sharp corner is set, and filament is ABS, HIPS, or PLA
+						if(!previousGcode.isEmpty() && checkSharpCorner && (filament == ABS || filament == HIPS || filament == PLA)) {
 							// Check if both counters are less than or equal to one
 							if(cornerCounter <= 1 && layerCounter <= 1) {
 							
 								// Check if sharp corner
-								if(isSharpCorner(gcode, previousGcode)) {
+								if(isSharpCornerForThermalBonding(gcode, previousGcode)) {
 								
 									// Check if refrence g-codes is set
 									if(refrenceGcode.isEmpty()) {
@@ -676,7 +937,7 @@ bool thermalBondingPreprocessor() {
 							}
 							
 							// Otherwise check if corner counter is greater than one but layer counter isn't and sharp corner
-							else if(cornerCounter >= 1 && layerCounter <= 1 && isSharpCorner(gcode, refrenceGcode)) {
+							else if(cornerCounter >= 1 && layerCounter <= 1 && isSharpCornerForThermalBonding(gcode, refrenceGcode)) {
 							
 								// Check if a tack point was created
 								tackPoint = createTackPoint(gcode, refrenceGcode);
@@ -710,7 +971,7 @@ bool thermalBondingPreprocessor() {
 			previousGcode = gcode;
 			
 			// Check if not using wave bonding, filament is ABS, command contains G and Z, and in absolute mode
-			if(!useWaveBonding && filament == ABS && gcode.hasValue('G') && gcode.hasValue('Z') && !relativeMode)
+			if(!useWaveBonding && filament == ABS && gcode.hasValue('G') && gcode.hasValue('Z') && relativeMode)
 				
 				// Adjust g-code to have Z lower by 0.1
 				gcode.setValue('Z', to_string(stod(gcode.getValue('Z')) - 0.1));
@@ -831,6 +1092,8 @@ bool feedRateConversionPreprocessor() {
 	Gcode gcode;
 	fstream processedFile(folderLocation + "/output.gcode", ios::in | ios::binary);
 	fstream temp(folderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
+	const double maxFeedRatePerSecond = 60.0001;
+	double commandFeedRate;
 	
 	// Check if temp file was opened successfully
 	if(processedFile.good() && temp.good()) {
@@ -841,8 +1104,22 @@ bool feedRateConversionPreprocessor() {
 			// Read in line
 			getline(processedFile, line);
 			
-			// Check if line was parsed successfully
-			gcode.parseLine(line);
+			// Check if line was parsed successfully and it contains G and F values
+			if(gcode.parseLine(line) && gcode.hasValue('G') && gcode.hasValue('F')) {
+			
+				// Get command's feedrate
+				commandFeedRate = stod(gcode.getValue('F')) / 60;
+				
+				// Force feed rate to adhere to limitations
+				if(commandFeedRate > maxFeedRatePerSecond)
+                			commandFeedRate = maxFeedRatePerSecond;
+                		
+                		// Calculate adjusted feed rate
+                		commandFeedRate = 30 + (1 - commandFeedRate / maxFeedRatePerSecond) * 800;
+                		
+				// Set new feed rate for the command
+				gcode.setValue('F', to_string(commandFeedRate));
+			}
 				
 			// Send line to temp
 			temp << gcode << endl;

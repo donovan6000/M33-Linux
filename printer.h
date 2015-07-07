@@ -5,6 +5,7 @@
 
 // Header files
 #include <string>
+#include "gcode.h"
 
 using namespace std;
 
@@ -76,6 +77,18 @@ class Printer {
 		bool updateFirmware(const char *file);
 		
 		/*
+		Name: Is Z Valid
+		Purpose: Checks if the printer's Z is valid
+		*/
+		bool isZValid();
+		
+		/*
+		Name: Calibrate Z
+		Purpose: Calibraters the printer's Z
+		*/
+		bool calibrateZ();
+		
+		/*
 		Name: Collect information
 		Purpose: Collects information from the printer
 		*/
@@ -95,21 +108,22 @@ class Printer {
 		string receiveResponse();
 		
 		/*
-		Name: Get Backlash X and Y
-		Purpose: Gets printer's backlash values
+		Name: Print File
+		Purpose: Pre-processed and send a file to the printer
 		*/
-		double getBacklashX();
-		double getBacklashY();
+		bool printFile(const char *file);
 		
 		/*
-		Name: Get Offsets Back Right, Back Left, Front Right, Front Left, and Bed Height 
-		Purpose: Gets printer's backlash values
+		Name: Set Pre-processors
+		Purpose: Sets which pre-processor stages to use
 		*/
-		double getBackRightOffset();
-		double getBackLeftOffset();
-		double getFrontRightOffset();
-		double getFrontLeftOffset();
-		double getBedHeightOffset();
+		void setValidationPreprocessor();
+		void setPreparationPreprocessor();
+		void setWaveBondingPreprocessor();
+		void setThermalBondingPreprocessor();
+		void setBedCompensationPreprocessor();
+		void setBacklashCompensationPreprocessor();
+		void setFeedRateConversionPreprocessor();
 	
 	// Private
 	private:
@@ -129,6 +143,56 @@ class Printer {
 		
 		// CRC32
 		uint32_t crc32(int32_t offset, const uint8_t *data, int32_t count);
+		
+		// Get print information
+		bool getPrintInformation();
+		
+		// Get bounded temperature
+		uint16_t getBoundedTemperature(uint16_t temperature);
+		
+		// Get distance
+		double getDistance(const Gcode &firstPoint, const Gcode &secondPoint);
+		
+		// Create tack point
+		Gcode createTackPoint(const Gcode &point, const Gcode &refrence);
+		
+		// Is sharp corner
+		bool isSharpCornerForThermalBonding(const Gcode &point, const Gcode &refrence);
+		bool isSharpCornerForWaveBonding(const Gcode &point, const Gcode &refrence);
+		
+		// Get current adjustment Z
+		double getCurrentAdjustmentZ();
+		
+		// Get height adjustment required
+		double getHeightAdjustmentRequired(double x, double y);
+		
+		// Pre-processor stages
+		bool validationPreprocessor();
+		bool preparationPreprocessor();
+		bool waveBondingPreprocessor();
+		bool thermalBondingPreprocessor();
+		bool bedCompensationPreprocessor();
+		bool backlashCompensationPreprocessor();
+		bool feedRateConversionPreprocessor();
+		
+		// Use pre-processor stages 
+		bool useValidation;
+		bool usePreparation;
+		bool useWaveBonding;
+		bool useThermalBonding;
+		bool useBedCompensation;
+		bool useBacklashCompensation;
+		bool useFeedRateConversion;
+		
+		// Print values
+		double minXModel, minYModel, minZModel;
+		double maxXModel, maxYModel, maxZModel;
+		double minXExtruder, minYExtruder, minZExtruder;
+		double maxXExtruder, maxYExtruder, maxZExtruder;
+		double minFeedRate, maxFeedRate;
+		
+		// Working folder location
+		string workingFolderLocation;
 	
 		// Bootloader mode
 		bool bootloaderMode;

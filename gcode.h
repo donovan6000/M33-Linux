@@ -60,6 +60,12 @@ class Gcode {
 		bool hasParameter(char identifier) const;
 		
 		/*
+		Name: Remove Parameter
+		Purpose: Removes a specified parameter from the G-cocdde
+		*/
+		void removeParameter(char identifier);
+		
+		/*
 		Name: Has Value
 		Purpose: Checks if the G-code has a value associated with a specific identifier, so it can't detect flags
 		*/

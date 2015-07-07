@@ -1,12 +1,14 @@
 // Header files
+#include <iostream>
 #include <fstream>
 #include <stdexcept>
 #include <cstring>
+#include <cmath>
+#include <cfloat>
 #include <unistd.h>
 #include <fcntl.h>
 #include <termios.h>
 #include "printer.h"
-#include "gcode.h"
 
 
 // Definitions
@@ -18,16 +20,44 @@
 #define CHIP_NUMBER_OF_PAGES 0x80
 #define CHIP_TOTAL_MEMORY CHIP_NUMBER_OF_PAGES * CHIP_PAGE_SIZE * 2
 
+// Wave bonding settings
+#define WAVE_PERIOD 5
+#define WAVE_PERIOD_QUARTER WAVE_PERIOD / 4L
+#define WAVE_SIZE 0.15L
+
+// Thermal and wave bonding settings
+#define BONDING_HEIGHT_OFFSET -0.1L
+
+// Bed compensation settings
+#define CHANGE_IN_HEIGHT_THAT_DOUBLES_EXTRUSION 0.15L
+#define CHANGE_EXTRUSION_TO_COMPENSATE false
+#define FIRST_LAYER_ONLY false
+#define LEVELLING_MOVE_X 104.9L
+#define LEVELLING_MOVE_Y 103L
+#define MOVE_Z_TO_COMPENSATE true
+#define PROBE_Z_DISTANCE 55L
+#define SEGMENT_LENGTH 2L
+
+// Feed rate conversion settings
+#define MAX_FEED_RATE 60.0001L
+
 // Fan types
 enum fanTypes {HENGLIXIN = 0x01, LISTENER = 0x02, SHENZHEW = 0x03, NONE= 0xFF};
 
-// Rom decryption and encryption
+// Directions
+enum directions {POSITIVE, NEGATIVE, NEITHER};
+
+// Print tiers
+enum printTiers {LOW, MEDIUM, HIGH};
+
+// Rom decryption and encryption tables
 const uint8_t romDecryptionTable[] = {0x26, 0xE2, 0x63, 0xAC, 0x27, 0xDE, 0x0D, 0x94, 0x79, 0xAB, 0x29, 0x87, 0x14, 0x95, 0x1F, 0xAE, 0x5F, 0xED, 0x47, 0xCE, 0x60, 0xBC, 0x11, 0xC3, 0x42, 0xE3, 0x03, 0x8E, 0x6D, 0x9D, 0x6E, 0xF2, 0x4D, 0x84, 0x25, 0xFF, 0x40, 0xC0, 0x44, 0xFD, 0x0F, 0x9B, 0x67, 0x90, 0x16, 0xB4, 0x07, 0x80, 0x39, 0xFB, 0x1D, 0xF9, 0x5A, 0xCA, 0x57, 0xA9, 0x5E, 0xEF, 0x6B, 0xB6, 0x2F, 0x83, 0x65, 0x8A, 0x13, 0xF5, 0x3C, 0xDC, 0x37, 0xD3, 0x0A, 0xF4, 0x77, 0xF3, 0x20, 0xE8, 0x73, 0xDB, 0x7B, 0xBB, 0x0B, 0xFA, 0x64, 0x8F, 0x08, 0xA3, 0x7D, 0xEB, 0x5C, 0x9C, 0x3E, 0x8C, 0x30, 0xB0, 0x7F, 0xBE, 0x2A, 0xD0, 0x68, 0xA2, 0x22, 0xF7, 0x1C, 0xC2, 0x17, 0xCD, 0x78, 0xC7, 0x21, 0x9E, 0x70, 0x99, 0x1A, 0xF8, 0x58, 0xEA, 0x36, 0xB1, 0x69, 0xC9, 0x04, 0xEE, 0x3B, 0xD6, 0x34, 0xFE, 0x55, 0xE7, 0x1B, 0xA6, 0x4A, 0x9A, 0x54, 0xE6, 0x51, 0xA0, 0x4E, 0xCF, 0x32, 0x88, 0x48, 0xA4, 0x33, 0xA5, 0x5B, 0xB9, 0x62, 0xD4, 0x6F, 0x98, 0x6C, 0xE1, 0x53, 0xCB, 0x46, 0xDD, 0x01, 0xE5, 0x7A, 0x86, 0x75, 0xDF, 0x31, 0xD2, 0x02, 0x97, 0x66, 0xE4, 0x38, 0xEC, 0x12, 0xB7, 0x00, 0x93, 0x15, 0x8B, 0x6A, 0xC5, 0x71, 0x92, 0x45, 0xA1, 0x59, 0xF0, 0x06, 0xA8, 0x5D, 0x82, 0x2C, 0xC4, 0x43, 0xCC, 0x2D, 0xD5, 0x35, 0xD7, 0x3D, 0xB2, 0x74, 0xB3, 0x09, 0xC6, 0x7C, 0xBF, 0x2E, 0xB8, 0x28, 0x9F, 0x41, 0xBA, 0x10, 0xAF, 0x0C, 0xFC, 0x23, 0xD9, 0x49, 0xF6, 0x7E, 0x8D, 0x18, 0x96, 0x56, 0xD1, 0x2B, 0xAD, 0x4B, 0xC1, 0x4F, 0xC8, 0x3A, 0xF1, 0x1E, 0xBD, 0x4C, 0xDA, 0x50, 0xA7, 0x52, 0xE9, 0x76, 0xD8, 0x19, 0x91, 0x72, 0x85, 0x3F, 0x81, 0x61, 0xAA, 0x05, 0x89, 0x0E, 0xB5, 0x24, 0xE0};
 
 const uint8_t romEncryptionTable[] = {0xAC, 0x9C, 0xA4, 0x1A, 0x78, 0xFA, 0xB8, 0x2E, 0x54, 0xC8, 0x46, 0x50, 0xD4, 0x06, 0xFC, 0x28, 0xD2, 0x16, 0xAA, 0x40, 0x0C, 0xAE, 0x2C, 0x68, 0xDC, 0xF2, 0x70, 0x80, 0x66, 0x32, 0xE8, 0x0E, 0x4A, 0x6C, 0x64, 0xD6, 0xFE, 0x22, 0x00, 0x04, 0xCE, 0x0A, 0x60, 0xE0, 0xBC, 0xC0, 0xCC, 0x3C, 0x5C, 0xA2, 0x8A, 0x8E, 0x7C, 0xC2, 0x74, 0x44, 0xA8, 0x30, 0xE6, 0x7A, 0x42, 0xC4, 0x5A, 0xF6, 0x24, 0xD0, 0x18, 0xBE, 0x26, 0xB4, 0x9A, 0x12, 0x8C, 0xD8, 0x82, 0xE2, 0xEA, 0x20, 0x88, 0xE4, 0xEC, 0x86, 0xEE, 0x98, 0x84, 0x7E, 0xDE, 0x36, 0x72, 0xB6, 0x34, 0x90, 0x58, 0xBA, 0x38, 0x10, 0x14, 0xF8, 0x92, 0x02, 0x52, 0x3E, 0xA6, 0x2A, 0x62, 0x76, 0xB0, 0x3A, 0x96, 0x1C, 0x1E, 0x94, 0x6E, 0xB2, 0xF4, 0x4C, 0xC6, 0xA0, 0xF0, 0x48, 0x6A, 0x08, 0x9E, 0x4E, 0xCA, 0x56, 0xDA, 0x5E, 0x2F, 0xF7, 0xBB, 0x3D, 0x21, 0xF5, 0x9F, 0x0B, 0x8B, 0xFB, 0x3F, 0xAF, 0x5B, 0xDB, 0x1B, 0x53, 0x2B, 0xF3, 0xB3, 0xAD, 0x07, 0x0D, 0xDD, 0xA5, 0x95, 0x6F, 0x83, 0x29, 0x59, 0x1D, 0x6D, 0xCF, 0x87, 0xB5, 0x63, 0x55, 0x8D, 0x8F, 0x81, 0xED, 0xB9, 0x37, 0xF9, 0x09, 0x03, 0xE1, 0x0F, 0xD3, 0x5D, 0x75, 0xC5, 0xC7, 0x2D, 0xFD, 0x3B, 0xAB, 0xCD, 0x91, 0xD1, 0x4F, 0x15, 0xE9, 0x5F, 0xCB, 0x25, 0xE3, 0x67, 0x17, 0xBD, 0xB1, 0xC9, 0x6B, 0xE5, 0x77, 0x35, 0x99, 0xBF, 0x69, 0x13, 0x89, 0x61, 0xDF, 0xA3, 0x45, 0x93, 0xC1, 0x7B, 0xC3, 0xF1, 0xD7, 0xEB, 0x4D, 0x43, 0x9B, 0x05, 0xA1, 0xFF, 0x97, 0x01, 0x19, 0xA7, 0x9D, 0x85, 0x7F, 0x4B, 0xEF, 0x73, 0x57, 0xA9, 0x11, 0x79, 0x39, 0xB7, 0xE7, 0x1F, 0x49, 0x47, 0x41, 0xD9, 0x65, 0x71, 0x33, 0x51, 0x31, 0xD5, 0x27, 0x7D, 0x23};
 
 // Crc seed and table
 const uint32_t crc32Seed = 0xFFFFFFFF;
+
 const uint32_t crc32Table[] = {0x00000000, 0x77073096, 0xEE0E612C, 0x990951BA, 0x076DC419, 0x706AF48F, 0xE963A535, 0x9E6495A3, 0x0EDB8832, 0x79DCB8A4, 0xE0D5E91E, 0x97D2D988, 0x09B64C2B, 0x7EB17CBD, 0xE7B82D07, 0x90BF1D91, 0x1DB71064, 0x6AB020F2, 0xF3B97148, 0x84BE41DE, 0x1ADAD47D, 0x6DDDE4EB, 0xF4D4B551, 0x83D385C7, 0x136C9856, 0x646BA8C0, 0xFD62F97A, 0x8A65C9EC, 0x14015C4F, 0x63066CD9, 0xFA0F3D63, 0x8D080DF5, 0x3B6E20C8, 0x4C69105E, 0xD56041E4, 0xA2677172, 0x3C03E4D1, 0x4B04D447, 0xD20D85FD, 0xA50AB56B, 0x35B5A8FA, 0x42B2986C, 0xDBBBC9D6, 0xACBCF940, 0x32D86CE3, 0x45DF5C75, 0xDCD60DCF, 0xABD13D59, 0x26D930AC, 0x51DE003A, 0xC8D75180, 0xBFD06116, 0x21B4F4B5, 0x56B3C423, 0xCFBA9599, 0xB8BDA50F, 0x2802B89E, 0x5F058808, 0xC60CD9B2, 0xB10BE924, 0x2F6F7C87, 0x58684C11, 0xC1611DAB, 0xB6662D3D, 0x76DC4190, 0x01DB7106, 0x98D220BC, 0xEFD5102A, 0x71B18589, 0x06B6B51F, 0x9FBFE4A5, 0xE8B8D433, 0x7807C9A2, 0x0F00F934, 0x9609A88E, 0xE10E9818, 0x7F6A0DBB, 0x086D3D2D, 0x91646C97, 0xE6635C01, 0x6B6B51F4, 0x1C6C6162, 0x856530D8, 0xF262004E, 0x6C0695ED, 0x1B01A57B, 0x8208F4C1, 0xF50FC457, 0x65B0D9C6, 0x12B7E950, 0x8BBEB8EA, 0xFCB9887C, 0x62DD1DDF, 0x15DA2D49, 0x8CD37CF3, 0xFBD44C65, 0x4DB26158, 0x3AB551CE, 0xA3BC0074, 0xD4BB30E2, 0x4ADFA541, 0x3DD895D7, 0xA4D1C46D, 0xD3D6F4FB, 0x4369E96A, 0x346ED9FC, 0xAD678846, 0xDA60B8D0, 0x44042D73, 0x33031DE5, 0xAA0A4C5F, 0xDD0D7CC9, 0x5005713C, 0x270241AA, 0xBE0B1010, 0xC90C2086, 0x5768B525, 0x206F85B3, 0xB966D409, 0xCE61E49F, 0x5EDEF90E, 0x29D9C998, 0xB0D09822, 0xC7D7A8B4, 0x59B33D17, 0x2EB40D81, 0xB7BD5C3B, 0xC0BA6CAD, 0xEDB88320, 0x9ABFB3B6, 0x03B6E20C, 0x74B1D29A, 0xEAD54739, 0x9DD277AF, 0x04DB2615, 0x73DC1683, 0xE3630B12, 0x94643B84, 0x0D6D6A3E, 0x7A6A5AA8, 0xE40ECF0B, 0x9309FF9D, 0x0A00AE27, 0x7D079EB1, 0xF00F9344, 0x8708A3D2, 0x1E01F268, 0x6906C2FE, 0xF762575D, 0x806567CB, 0x196C3671, 0x6E6B06E7, 0xFED41B76, 0x89D32BE0, 0x10DA7A5A, 0x67DD4ACC, 0xF9B9DF6F, 0x8EBEEFF9, 0x17B7BE43, 0x60B08ED5, 0xD6D6A3E8, 0xA1D1937E, 0x38D8C2C4, 0x4FDFF252, 0xD1BB67F1, 0xA6BC5767, 0x3FB506DD, 0x48B2364B, 0xD80D2BDA, 0xAF0A1B4C, 0x36034AF6, 0x41047A60, 0xDF60EFC3, 0xA867DF55, 0x316E8EEF, 0x4669BE79, 0xCB61B38C, 0xBC66831A, 0x256FD2A0, 0x5268E236, 0xCC0C7795, 0xBB0B4703, 0x220216B9, 0x5505262F, 0xC5BA3BBE, 0xB2BD0B28, 0x2BB45A92, 0x5CB36A04, 0xC2D7FFA7, 0xB5D0CF31, 0x2CD99E8B, 0x5BDEAE1D, 0x9B64C2B0, 0xEC63F226, 0x756AA39C, 0x026D930A, 0x9C0906A9, 0xEB0E363F, 0x72076785, 0x05005713, 0x95BF4A82, 0xE2B87A14, 0x7BB12BAE, 0x0CB61B38, 0x92D28E9B, 0xE5D5BE0D, 0x7CDCEFB7, 0x0BDBDF21, 0x86D3D2D4, 0xF1D4E242, 0x68DDB3F8, 0x1FDA836E, 0x81BE16CD, 0xF6B9265B, 0x6FB077E1, 0x18B74777, 0x88085AE6, 0xFF0F6A70, 0x66063BCA, 0x11010B5C, 0x8F659EFF, 0xF862AE69, 0x616BFFD3, 0x166CCF45, 0xA00AE278, 0xD70DD2EE, 0x4E048354, 0x3903B3C2, 0xA7672661, 0xD06016F7, 0x4969474D, 0x3E6E77DB, 0xAED16A4A, 0xD9D65ADC, 0x40DF0B66, 0x37D83BF0, 0xA9BCAE53, 0xDEBB9EC5, 0x47B2CF7F, 0x30B5FFE9, 0xBDBDF21C, 0xCABAC28A, 0x53B39330, 0x24B4A3A6, 0xBAD03605, 0xCDD70693, 0x54DE5729, 0x23D967BF, 0xB3667A2E, 0xC4614AB8, 0x5D681B02, 0x2A6F2B94, 0xB40BBE37, 0xC30C8EA1, 0x5A05DF1B, 0x2D02EF8D};
 
 
@@ -42,6 +72,18 @@ Printer::Printer() {
 	
 	// Set bootloader mode
 	bootloaderMode = true;
+	
+	// Create temporary folder
+	workingFolderLocation = mkdtemp(const_cast<char *>(static_cast<string>("/tmp/m3d-XXXXXX").c_str()));
+	
+	// Clear all use pre-processor stages
+	useValidation = false;
+	usePreparation = false;
+	useWaveBonding = false;
+	useThermalBonding = false;
+	useBedCompensation = false;
+	useBacklashCompensation = false;
+	useFeedRateConversion = false;
 }
 
 Printer::~Printer() {
@@ -49,6 +91,9 @@ Printer::~Printer() {
 	// Close file descriptor if open
 	if(fd != -1)
 		close(fd);
+	
+	// Delete temporary folder
+	rmdir(workingFolderLocation.c_str());
 }
 
 bool Printer::connect() {
@@ -431,6 +476,96 @@ bool Printer::updateFirmware(const char *file) {
 	// Return false
 	return false;
 }
+
+bool Printer::isZValid() {
+
+	// Retrurn valid Z
+	return validZ;
+}
+		
+bool Printer::calibrateZ() {
+
+	// Initialize variables
+	string response;
+
+	// Turn off heater
+	do {
+		sendRequest("M104 S0");
+		do {
+			response = receiveResponse();
+		} while(response.empty());
+	} while(response.substr(0, 2) != "ok");
+	
+	// Delay
+	do {
+		sendRequest("G4 S10");
+		do {
+			response = receiveResponse();
+		} while(response.empty());
+	} while(response.substr(0, 2) != "ok");
+	
+	// Relative mode
+	do {
+		sendRequest("G91");
+		do {
+			response = receiveResponse();
+		} while(response.empty());
+	} while(response.substr(0, 2) != "ok");
+	
+	// Move to position
+	do {
+		sendRequest("G0 Y20 Z2 F150");
+		do {
+			response = receiveResponse();
+		} while(response.empty());
+	} while(response.substr(0, 2) != "ok");
+	
+	// Set heater temperature and wait
+	do {
+		sendRequest("M109 S150");
+		do {
+			response = receiveResponse();
+		} while(response.empty());
+	} while(response.substr(0, 2) != "ok");
+	
+	// Turn off heater
+	do {
+		sendRequest("M104 S0");
+		do {
+			response = receiveResponse();
+		} while(response.empty());
+	} while(response.substr(0, 2) != "ok");
+	
+	// Turn off fan
+	do {
+		sendRequest("M106 S0");
+		do {
+			response = receiveResponse();
+		} while(response.empty());
+	} while(response.substr(0, 2) != "ok");
+	
+	// Calibrate Z
+	do {
+		sendRequest("G30");
+		do {
+			response = receiveResponse();
+		} while(response.empty());
+	} while(response.substr(0, 2) != "ok");
+	
+	// Verify results
+	do {
+		sendRequest("M577 F0");
+		do {
+			response = receiveResponse();
+		} while(response.empty());
+	} while(response.substr(0, 2) != "ok");
+	
+	// Set valid Z
+	validZ = true;
+	
+	// Return true
+	return true;
+}
 		
 bool Printer::collectInformation() {
 
@@ -503,7 +638,7 @@ bool Printer::collectInformation() {
 		response = receiveResponse();
 	
 		// Set valid Z and status
-		validZ = response.find("VZ:1") != string::npos; 
+		validZ = response.find("ZV:1") != string::npos; 
 		status = stoi(response.substr(response.find("S:") + 2));
 		
 		// Get filament information
@@ -554,46 +689,177 @@ string Printer::receiveResponse() {
 	return bootloaderMode ? receiveResponseAscii() : receiveResponseBinary();
 }
 
-double Printer::getBacklashX() {
+bool Printer::printFile(const char *file) {
 
-	// Return X backlash
-	return backlashX;
+	// Initialize variables
+	fstream processedFile;
+	ifstream input;
+	string line, response;
+	uint64_t totalLines = 0, lineCounter = 0;
+	
+	// Check if opening input and creating processed file wern't successful
+	input.open(file, ios::in | ios::binary);
+	processedFile.open(workingFolderLocation + "/output.gcode", ios::out | ios::binary | ios::app);
+	if(!input.good() || !processedFile.good())
+	
+		// Return false
+		return false;
+	
+	// Read in file
+	processedFile << input.rdbuf();
+	processedFile.close();
+	
+	// Display message
+	cout << "Processing " << file << endl;
+
+	// Check if print dimensions arte out of bounds
+	if(!getPrintInformation())
+	
+		// Return false
+		return false;
+	
+	// Use validation preprocessor if set
+	if(useValidation) {
+		cout << "Using validation pre-processor" << endl;
+		validationPreprocessor();
+	}
+	
+	// Use preparation preprocessor if set
+	if(usePreparation) {
+		cout << "Using preparation pre-processor" << endl;
+		preparationPreprocessor();
+	}
+	
+	// Use wave bonding preprocessor if set
+	if(useWaveBonding) {
+		cout << "Using wave bonding pre-processor" << endl;
+		waveBondingPreprocessor();
+	}
+	
+	// Use thermal bonding preprocessor if set
+	if(useThermalBonding) {
+		cout << "Using thermal bonding pre-processor" << endl;
+		thermalBondingPreprocessor();
+	}
+	
+	// Use bed compensation preprocessor if set
+	if(useBedCompensation) {
+		cout << "Using bed compensation pre-processor" << endl;
+		bedCompensationPreprocessor();
+	}
+	
+	// Use backlash compensation preprocessor if set
+	if(useBacklashCompensation) {
+		cout << "Using backlash compensation pre-processor" << endl;
+		backlashCompensationPreprocessor();
+	}
+	
+	// Use feed rate conversion proprocessor if set
+	if(useFeedRateConversion) {
+		cout << "Using feed rate conversion pre-processor" << endl;
+		feedRateConversionPreprocessor();
+	}
+	
+	// Determine the number of command lines in the fully processed file
+	processedFile.open(workingFolderLocation + "/output.gcode", ios::in | ios::binary);
+	while(processedFile.peek() != EOF) {
+		getline(processedFile, line);
+		totalLines++;
+	}
+	processedFile.clear();
+	processedFile.seekg(0, ios::beg);
+	
+	// Display message
+	cout << "Starting print" << endl;
+
+	// Go through file
+	while(processedFile.peek() != EOF) {
+
+		// Get line
+		getline(processedFile, line);
+
+		// Display percent complete
+		lineCounter++;
+		cout << dec << lineCounter << '/' << totalLines << ' ' << fixed << static_cast<float>(lineCounter) / totalLines << '%' << endl;
+
+		// Send line to the device
+		do {
+			
+			// Get next command if line didn't contain valid g-code
+			if(!sendRequest(line)) {
+			
+				cout << "Failed to parse " << line << endl << endl;
+				break;
+			}
+			
+			// Display command
+			cout << "Send: " << line << endl;
+			
+			// Get valid response
+			do {
+				response = receiveResponse();
+				if(line.substr(0, 2) == "G0" && response == "Info:Too small")
+					response = receiveResponse();
+			} while(response.empty());
+			
+			// Display response
+			cout << "Receive: " << response << endl << endl;
+		} while(response.substr(0, 2) != "ok");
+	}
+	
+	// Close processed file
+	processedFile.close();
+	
+	// Delete processed file
+	unlink((workingFolderLocation + "/output.gcode").c_str());
+	
+	// Display message
+	cout << "Print finished" << endl;
+	
+	// Return true
+	return true;
 }
 
-double Printer::getBacklashY() {
+void Printer::setValidationPreprocessor() {
 
-	// Return Y backlash
-	return backlashY;
+	// Set use validation
+	useValidation = true;
 }
 
-double Printer::getBackRightOffset() {
+void Printer::setPreparationPreprocessor() {
 
-	// Return back right offset
-	return backRightOffset;
+	// Set use preparation
+	usePreparation = true;
 }
 
-double Printer::getBackLeftOffset() {
+void Printer::setWaveBondingPreprocessor() {
 
-	// Return back left offset
-	return backLeftOffset;
+	// Set use wave bonding
+	useWaveBonding = true;
 }
 
-double Printer::getFrontRightOffset() {
+void Printer::setThermalBondingPreprocessor() {
 
-	// Return front right offset
-	return frontRightOffset;
+	// Set use thermal bonding
+	useThermalBonding = true;
 }
 
-double Printer::getFrontLeftOffset() {
+void Printer::setBedCompensationPreprocessor() {
 
-	// Return front left offset
-	return frontLeftOffset;
+	// Set use bed compensation
+	useBedCompensation = true;
 }
 
-double Printer::getBedHeightOffset() {
+void Printer::setBacklashCompensationPreprocessor() {
 
-	// Return bed height offset
-	return bedHeightOffset;
+	// Set use backlash compensation
+	useBacklashCompensation = true;
+}
+
+void Printer::setFeedRateConversionPreprocessor() {
+
+	// Set use feed rate conversion
+	useFeedRateConversion = true;
 }
 
 bool Printer::sendRequestAscii(char data) {
@@ -741,4 +1007,1408 @@ uint32_t Printer::crc32(int32_t offset, const uint8_t *data, int32_t count) {
 	
 	// Return updated crc
 	return crc ^ crc32Seed;
+}
+
+bool Printer::getPrintInformation() {
+
+	// Initialize variables
+	string line;
+	Gcode gcode;
+	fstream file(workingFolderLocation + "/output.gcode", ios::in | ios::binary);
+	double localX = 54, localY = 60, localZ = 0, localE = 0, commandX, commandY, commandZ, commandE, commandF;
+	bool relativeMode = true, positiveExtrusion;
+	printTiers tier = LOW;
+	
+	// Reset all print values
+	minXModel = DBL_MAX, minYModel = DBL_MAX, minZModel = DBL_MAX;
+	maxXModel = 0, maxYModel = 0, maxZModel = 0;
+	minXExtruder = DBL_MAX, minYExtruder = DBL_MAX, minZExtruder = DBL_MAX;
+	maxXExtruder = 0, maxYExtruder = 0, maxZExtruder = 0;
+	minFeedRate = 0, maxFeedRate = DBL_MAX;
+	
+	// Check if file was opened successfully
+	if(file.good()) {
+	
+		// Go through file
+		while(file.peek() != EOF) {
+	
+			// Read in line
+			getline(file, line);
+			
+			// Check if line was parsed successfully and it's a G command
+			if(gcode.parseLine(line) && gcode.hasValue('G')) {
+			
+				// Check what parameter is associated with the command
+				switch(stoi(gcode.getValue('G'))) {
+				
+					case 0:
+					case 1:
+					
+						// Clear positive extruding
+						positiveExtrusion = false;
+						
+						// Check if command has an E value
+						if(gcode.hasValue('E')) {
+						
+							// Get E value of the command
+							commandE = stod(gcode.getValue('E'));
+							
+							// Set positive extrusion based on adjusted E value
+							if(relativeMode) {
+								positiveExtrusion = commandE > 0;
+								localE += commandE;
+							}
+							
+							else {
+								positiveExtrusion = commandE > localE;
+								localE = commandE;
+							}
+						}
+						
+						// Check if command has a F value
+						if(gcode.hasValue('F')) {
+						
+							// Get F value of the command
+							commandF = stod(gcode.getValue('F'));
+						
+							// Update minimum and maximum feed rate values
+							minFeedRate = minFeedRate < commandF ? minFeedRate : commandF;
+							maxFeedRate = maxFeedRate > commandF ? maxFeedRate : commandF;
+						}
+						
+						// Check if positive extruding
+						if(positiveExtrusion) {
+						
+							// Update minimums and maximums dimensions of the model
+							minXModel = minXModel < localX ? minXModel : localX;
+							maxXModel = maxXModel > localX ? maxXModel : localX;
+							minYModel = minYModel < localY ? minYModel : localY;
+							maxYModel = maxYModel > localY ? maxYModel : localY;
+							minZModel = minZModel < localZ ? minZModel : localZ;
+							maxZModel = maxZModel > localZ ? maxZModel : localZ;
+						}
+						
+						// Update minimums and maximums dimensions of extruder
+						minXExtruder = minXExtruder < localX ? minXExtruder : localX;
+						maxXExtruder = maxXExtruder > localX ? maxXExtruder : localX;
+						minYExtruder = minYExtruder < localY ? minYExtruder : localY;
+						maxYExtruder = maxYExtruder > localY ? maxYExtruder : localY;
+						minZExtruder = minZExtruder < localZ ? minZExtruder : localZ;
+						maxZExtruder = maxZExtruder > localZ ? maxZExtruder : localZ;
+						
+						// Check if command has an X value
+						if(gcode.hasValue('X')) {
+						
+							// Get X value of the command
+							commandX = stod(gcode.getValue('X'));
+							
+							// Set local X
+							localX = relativeMode ? localX + commandX : commandX;
+						}
+						
+						// Check if command has a Y value
+						if(gcode.hasValue('Y')) {
+						
+							// Get Y value of the command
+							commandY = stod(gcode.getValue('Y'));
+							
+							// Set local Y
+							localY = relativeMode ? localY + commandY : commandY;
+						}
+						
+						// Check if command has a X value
+						if(gcode.hasValue('Z')) {
+						
+							// Get X value of the command
+							commandZ = stod(gcode.getValue('Z'));
+							
+							// Set local Z
+							localZ = relativeMode ? localZ + commandZ : commandZ;
+							
+							// Check if Z is out of bounds
+							if(localZ < BED_LOW_MIN_Z || localZ > BED_HIGH_MAX_Z)
+							
+								// Return false
+								return false;
+							
+							// Set print tier
+							if(localZ >= BED_LOW_MIN_Z && localZ < BED_LOW_MAX_Z)
+								tier = LOW;
+								
+							else if(localZ >= BED_LOW_MIN_Z && localZ < BED_MEDIUM_MAX_Z)
+								tier = MEDIUM;
+								
+							else if(localZ >= BED_HIGH_MIN_Z && localZ <= BED_HIGH_MAX_Z)
+								tier = HIGH;
+							
+						}
+						
+						// Return false if X or Y are out of bounds				
+						switch(tier) {
+							case LOW:
+							
+								if(localX < BED_LOW_MIN_X || localX > BED_LOW_MAX_X || localY < BED_LOW_MIN_Y || localY > BED_LOW_MAX_Y)
+									return false;
+							break;
+							
+							case MEDIUM:
+							
+								if(localX < BED_MEDIUM_MIN_X || localX > BED_MEDIUM_MAX_X || localY < BED_MEDIUM_MIN_Y || localY > BED_MEDIUM_MAX_Y)
+									return false;
+							break;
+
+							case HIGH:
+							
+								if(localX < BED_HIGH_MIN_X || localX > BED_HIGH_MAX_X || localY < BED_HIGH_MIN_Y || localY > BED_HIGH_MAX_Y)
+									return false;
+							break;
+						}
+						
+						// Check if positive extruding
+						if(positiveExtrusion) {
+						
+							// Update minimums and maximums dimensions of the model
+							minXModel = minXModel < localX ? minXModel : localX;
+							maxXModel = maxXModel > localX ? maxXModel : localX;
+							minYModel = minYModel < localY ? minYModel : localY;
+							maxYModel = maxYModel > localY ? maxYModel : localY;
+							minZModel = minZModel < localZ ? minZModel : localZ;
+							maxZModel = maxZModel > localZ ? maxZModel : localZ;
+						}
+						
+						// Update minimums and maximums dimensions of extruder
+						minXExtruder = minXExtruder < localX ? minXExtruder : localX;
+						maxXExtruder = maxXExtruder > localX ? maxXExtruder : localX;
+						minYExtruder = minYExtruder < localY ? minYExtruder : localY;
+						maxYExtruder = maxYExtruder > localY ? maxYExtruder : localY;
+						minZExtruder = minZExtruder < localZ ? minZExtruder : localZ;
+						maxZExtruder = maxZExtruder > localZ ? maxZExtruder : localZ;
+					break;
+					
+					case 90:
+					
+						// Clear relative mode
+						relativeMode = false;
+					break;
+				
+					case 91:
+					
+						// Set relative mode
+						relativeMode = true;
+					break;
+				}
+			}
+			
+			// Check if line contains temperature information
+			if(line.find(";ideal temp:") != string::npos)
+			
+				// Set filament temperature
+				filamentTemperature = getBoundedTemperature(stoi(line.substr(12)));
+		}
+		
+		// Return true
+		return true;
+	}
+	
+	// Return false
+	return false;
+}
+
+uint16_t Printer::getBoundedTemperature(uint16_t temperature) {
+
+	// Return temperature bounded by range
+	return temperature > 285 ? 285 : temperature < 150 ? 150 : temperature;
+}
+
+double Printer::getDistance(const Gcode &firstPoint, const Gcode &secondPoint) {
+
+	// Initialize variables
+	double firstX = firstPoint.hasValue('X') ? stod(firstPoint.getValue('X')) : 0;
+	double firstY = firstPoint.hasValue('Y') ? stod(firstPoint.getValue('Y')) : 0;
+	double secondX = secondPoint.hasValue('X') ? stod(secondPoint.getValue('X')) : 0;
+	double secondY = secondPoint.hasValue('Y') ? stod(secondPoint.getValue('Y')) : 0;
+
+	// Return distance between the two values
+	return sqrt(pow(firstX - secondX, 2) + pow(firstY - secondY, 2));
+}
+
+Gcode Printer::createTackPoint(const Gcode &point, const Gcode &refrence) {
+
+	// Initialize variables
+	Gcode gcode;
+	uint32_t time = ceil(getDistance(point, refrence));
+	
+	// Check if time is greater than 5
+	if(time > 5) {
+	
+		// Set g-code to a delay command based on time
+		gcode.setValue('G', "4");
+		gcode.setValue('P', to_string(time));
+	}
+	
+	// Return gcode
+	return gcode;
+}
+
+bool Printer::isSharpCornerForThermalBonding(const Gcode &point, const Gcode &refrence) {
+
+	// Initialize variables
+	double currentX = point.hasValue('X') ? stod(point.getValue('X')) : 0;
+	double currentY = point.hasValue('Y') ? stod(point.getValue('Y')) : 0;
+	double previousX = refrence.hasValue('X') ? stod(refrence.getValue('X')) : 0;
+	double previousY = refrence.hasValue('Y') ? stod(refrence.getValue('Y')) : 0;
+	
+	// Calculate value
+	double value = acos((currentX * previousX + currentY * previousY) / (pow(currentX * currentX + currentY * currentY, 2) * pow(previousX * previousX + previousY * previousY, 2)));
+	
+	// Return if sharp corner
+	return value > 0 && value < M_PI_2;
+}
+
+bool Printer::isSharpCornerForWaveBonding(const Gcode &point, const Gcode &refrence) {
+
+	// Initialize variables
+	double currentX = point.hasValue('X') ? stod(point.getValue('X')) : 0;
+	double currentY = point.hasValue('Y') ? stod(point.getValue('Y')) : 0;
+	double previousX = refrence.hasValue('X') ? stod(refrence.getValue('X')) : 0;
+	double previousY = refrence.hasValue('Y') ? stod(refrence.getValue('Y')) : 0;
+	
+	// Calculate value
+	double value = acos((currentX * previousX + currentY + previousY) / (pow(currentX * currentX + currentY + currentY, 2) * pow(previousX * previousX + previousY + previousY, 2)));
+	
+	// Return if sharp corner
+	return value > 0 && value < M_PI_2;
+}
+
+double Printer::getCurrentAdjustmentZ() {
+
+	// Initialize variables
+	static uint8_t waveStep = 0;
+
+	// Set adjustment
+	double adjustment = waveStep ? waveStep != 2 ? 0 : -1.5 : 1;
+	
+	// Increment wave step
+	waveStep = (waveStep + 1) % 4;
+	
+	// Return adjustment
+	return adjustment * WAVE_SIZE;
+}
+
+double Printer::getHeightAdjustmentRequired(double x, double y) {
+
+	// Initialize variables
+	double left = (backLeftOffset - frontLeftOffset) / LEVELLING_MOVE_Y;
+	double right = (backRightOffset - frontRightOffset) / LEVELLING_MOVE_Y;
+	
+	// Return height adjustment
+	return (right * y + frontRightOffset - (left * y + frontLeftOffset)) / LEVELLING_MOVE_X * x + (left * y + frontLeftOffset);
+}
+
+bool Printer::validationPreprocessor() {
+
+	// Initialzie variables
+	string line;
+	Gcode gcode;
+	fstream processedFile(workingFolderLocation + "/output.gcode", ios::in | ios::binary);
+	fstream temp(workingFolderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
+	
+	// Check if temp file was opened successfully
+	if(processedFile.good() && temp.good()) {
+	
+		// Go through processed file
+		while(processedFile.peek() != EOF) {
+		
+			// Read in line
+			getline(processedFile, line);
+			
+			// Pase line
+			gcode.parseLine(line);
+			
+			// Check if command isn't valid for the printer
+			if(gcode.hasValue('M') && (gcode.getValue('M') == "82" || gcode.getValue('M') == "83"))
+			
+				// Get next line
+				continue;
+			
+			// Check if command contains tool selection
+			if(gcode.hasParameter('T'))
+			
+				// Remove tool selection
+				gcode.removeParameter('T');
+			
+			// Send line to temp
+			temp << gcode << endl;
+		}
+		
+		// Transfer contents of temp to processed file
+		temp.clear();
+		temp.seekg(0, ios::beg);
+		processedFile.close();
+		processedFile.open(workingFolderLocation + "/output.gcode", ios::out | ios::binary | ios::trunc);
+		processedFile << temp.rdbuf();
+		processedFile.close();
+		
+		// Delete temp
+		unlink((workingFolderLocation + "/temp").c_str());
+		
+		// Return true
+		return true;
+	}
+	
+	// Return false
+	return false;
+}
+
+bool Printer::preparationPreprocessor() {
+
+	// Initialzie variables
+	string line;
+	Gcode gcode;
+	fstream processedFile(workingFolderLocation + "/output.gcode", ios::in | ios::binary);
+	fstream temp(workingFolderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
+	
+	// Check if temp file was opened successfully
+	if(processedFile.good() && temp.good()) {
+	
+		// Add intro to temp
+		temp << "M106 S" << (filamentType == PLA ? "255" : "50") << endl;
+		temp << "M17" << endl;
+		temp << "G90" << endl;
+		temp << "M104 S" << to_string(filamentTemperature) << endl;
+		temp << "G0 Z5 F2900" << endl;
+		temp << "G28" << endl;
+		temp << "M18" << endl;
+		temp << "M109 S" << to_string(filamentTemperature) << endl;
+		temp << "G4 S10" << endl;
+		temp << "M17" << endl;
+		temp << "G91" << endl;
+		temp << "G0 E7.5 F2000" << endl;
+		temp << "G92 E0" << endl;
+		temp << "G90" << endl;
+		temp << "G0 F2400" << endl;
+		temp << "; can extrude" << endl;
+	
+		// Go through processed file
+		while(processedFile.peek() != EOF) {
+	
+			// Read in line
+			getline(processedFile, line);
+			
+			// Pase line
+			gcode.parseLine(line);
+			
+			// Check if command controls extruder temperature or fan speed
+			if(gcode.hasValue('M') && (gcode.getValue('M') == "104" || gcode.getValue('M') == "106" || gcode.getValue('M') == "107" || gcode.getValue('M') == "109"))
+			
+				// Get next line
+				continue;
+			
+			// Send line to temp
+			temp << gcode << endl;
+		}
+	
+		// Add outro to temp
+		temp << "G91" << endl;
+		temp << "G0 E-1 F2000" << endl;
+		temp << "G0 X5 Y5 F2000" << endl;
+		temp << "G0 E-8 F2000" << endl;
+		temp << "M104 S0" << endl;
+		if(maxZExtruder > 60) {
+			if(maxZExtruder < 110)
+				temp << "G0 Z3 F2900" << endl;
+			temp << "G90" << endl;
+			temp << "G0 X90 Y84" << endl;
+		}
+		else {
+			temp << "G0 Z3 F2900" << endl;
+			temp << "G90" << endl;
+			temp << "G0 X95 Y95" << endl;
+		}
+		temp << "M18" << endl;
+		temp << "M107" << endl;
+		
+		// Transfer contents of temp to processed file
+		temp.clear();
+		temp.seekg(0, ios::beg);
+		processedFile.close();
+		processedFile.open(workingFolderLocation + "/output.gcode", ios::out | ios::binary | ios::trunc);
+		processedFile << temp.rdbuf();
+		processedFile.close();
+		
+		// Delete temp
+		unlink((workingFolderLocation + "/temp").c_str());
+		
+		// Return true
+		return true;
+	}
+	
+	// Return false
+	return false;
+}
+
+bool Printer::waveBondingPreprocessor() {
+
+	// Initialzie variables
+	string line;
+	Gcode gcode, previousGcode, refrenceGcode, tackPoint, extraGcode;
+	fstream processedFile(workingFolderLocation + "/output.gcode", ios::in | ios::binary);
+	fstream temp(workingFolderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
+	bool relativeMode = true;
+	bool firstLayer = true, changesPlane = false;
+	uint32_t cornerCounter = 0, layerNumber, baseLayer = 0, waveRatio;
+	double distance;
+	double positionAbsoluteX = 0, positionAbsoluteY = 0, positionAbsoluteZ = 0, positionAbsoluteE = 0;
+	double positionRelativeX = 0, positionRelativeY = 0, positionRelativeZ = 0, positionRelativeE = 0;
+	double deltaX, deltaY, deltaZ, deltaE;
+	double tempRelativeX, tempRelativeY, tempRelativeZ, tempRelativeE;
+	double relativeDifferenceX, relativeDifferenceY, relativeDifferenceZ, relativeDifferenceE;
+	double deltaRatioX, deltaRatioY, deltaRatioZ, deltaRatioE;
+	
+	// Check if temp file was opened successfully
+	if(processedFile.good() && temp.good()) {
+	
+		// Go through processed file
+		while(processedFile.peek() != EOF) {
+	
+			// Read in line
+			getline(processedFile, line);
+			
+			// Check if line is a layer command
+			if(line.find(";LAYER:") != string::npos) {
+			
+				// Set layer number
+				layerNumber = stoi(line.substr(7));
+				
+				// Set base number is layer number is less than it
+				if(layerNumber < baseLayer)
+					baseLayer = layerNumber;
+				
+				// Set first layer
+				firstLayer = layerNumber == baseLayer;
+			}
+			
+			// Check is line was parsed, it contains G0 or G1, and it's not in relative mode
+			if(gcode.parseLine(line) && gcode.hasValue('G') && (gcode.getValue('G') == "0" || gcode.getValue('G') == "1") && !relativeMode) {
+			
+				// Check if line contains an X or Y value
+				if(gcode.hasValue('X') || gcode.hasValue('Y'))
+				
+					// Set changes plane
+					changesPlane = true;
+				
+				// Check if line contains a Z value and is in the first layer
+				if(gcode.hasValue('Z') && firstLayer)
+				
+					// Adjust Z value by height offset
+					gcode.setValue('Z', to_string(stod(gcode.getValue('Z')) + BONDING_HEIGHT_OFFSET));
+				
+				// Set delta values
+				deltaX = !gcode.hasValue('X') ? 0 : stod(gcode.getValue('X')) - positionRelativeX;
+				deltaY = !gcode.hasValue('Y')? 0 : stod(gcode.getValue('Y')) - positionRelativeY;
+				deltaZ = !gcode.hasValue('Z') ? 0 : stod(gcode.getValue('Z')) - positionRelativeZ;
+				deltaE = !gcode.hasValue('E') ? 0 : stod(gcode.getValue('E')) - positionRelativeE;
+				
+				// Adjust position absolute and relative values for the changes
+				positionAbsoluteX += deltaX;
+				positionAbsoluteY += deltaY;
+				positionAbsoluteZ += deltaZ;
+				positionAbsoluteE += deltaE;
+				positionRelativeX += deltaX;
+				positionRelativeY += deltaY;
+				positionRelativeZ += deltaZ;
+				positionRelativeE += deltaE;
+				
+				// Calculate distance of change
+				distance = sqrt(deltaX * deltaX + deltaY * deltaY);
+				
+				// Set wave ratio
+				waveRatio = distance > WAVE_PERIOD_QUARTER ? distance / WAVE_PERIOD_QUARTER : 1;
+				
+				// Set relative differences
+				relativeDifferenceX = positionRelativeX - deltaX;
+				relativeDifferenceY = positionRelativeY - deltaY;
+				relativeDifferenceZ = positionRelativeZ - deltaZ;
+				relativeDifferenceE = positionRelativeE - deltaE;
+				
+				// Set delta ratios
+				deltaRatioX = deltaX / distance;
+				deltaRatioY = deltaY / distance;
+				deltaRatioZ = deltaZ / distance;
+				deltaRatioE = deltaE / distance;
+				
+				// Check if in first dayer and delta E is greater than zero 
+				if(firstLayer && deltaE > 0) {
+				
+					// Check if previous g-code is not empty
+					if(!previousGcode.isEmpty()) {
+					
+						// Check if corner count is at most one and sharp corner
+						if(cornerCounter <= 1 && isSharpCornerForWaveBonding(gcode, previousGcode)) {
+						
+							// Check if refrence g-codes is set
+							if(refrenceGcode.isEmpty()) {
+							
+								// Check if a tack point was created
+								tackPoint = createTackPoint(gcode, previousGcode);
+								if(!tackPoint.isEmpty())
+								
+									// Send tack point to temp
+									temp << tackPoint << endl; 
+							}
+							
+							// Set refrence g-code
+							refrenceGcode = gcode;
+							
+							// Increment corner counter
+							cornerCounter++;
+						}
+						
+						// Otherwise check is corner count is at least one and sharp corner
+						else if(cornerCounter >= 1 && isSharpCornerForWaveBonding(gcode, refrenceGcode)) {
+						
+							// Check if a tack point was created
+							tackPoint = createTackPoint(gcode, refrenceGcode);
+							if(!tackPoint.isEmpty())
+							
+								// Send tack point to temp
+								temp << tackPoint << endl; 
+							
+							// Set refrence g-code
+							refrenceGcode = gcode;
+						}
+					}
+					
+					// Go through all of the wave
+					for(uint32_t i = 1; i <= waveRatio; i++) {
+					
+						// Check if at last component
+						if(i == waveRatio) {
+						
+							// Set temp relative values
+							tempRelativeX = positionRelativeX;
+							tempRelativeY = positionRelativeY;
+							tempRelativeZ = positionRelativeZ;
+							tempRelativeE = positionRelativeE;
+						}
+						
+						// Otherwise
+						else {
+						
+							// Set temp relative values
+							tempRelativeX = relativeDifferenceX + i * WAVE_PERIOD_QUARTER * deltaRatioX;
+							tempRelativeY = relativeDifferenceY + i * WAVE_PERIOD_QUARTER * deltaRatioY;
+							tempRelativeZ = relativeDifferenceZ + i * WAVE_PERIOD_QUARTER * deltaRatioZ;
+							tempRelativeE = relativeDifferenceE + i * WAVE_PERIOD_QUARTER * deltaRatioE;
+						}
+						
+						// Check if not at least component
+						if(i != waveRatio) {
+						
+							// Set extra g-code G value
+							extraGcode.clear();
+							extraGcode.setValue('G', gcode.getValue('G'));
+							
+							// Set extra g-code X value
+							if(gcode.hasValue('X'))
+								extraGcode.setValue('X', to_string(positionRelativeX - deltaX + tempRelativeX - relativeDifferenceX));
+							
+							// Set extra g-cdoe Y value
+							if(gcode.hasValue('Y'))
+								extraGcode.setValue('Y', to_string(positionRelativeY - deltaY + tempRelativeY - relativeDifferenceY));
+							
+							// Check if plane changed
+							if(changesPlane)
+							
+								// Set extra g-code Z value
+								extraGcode.setValue('Z', to_string(positionRelativeZ - deltaZ + tempRelativeZ - relativeDifferenceZ + getCurrentAdjustmentZ()));
+							
+							// Otherwise check if command has a Z value and changes in Z are noticable
+							else if(gcode.hasValue('Z') && deltaZ != DBL_EPSILON)
+							
+								// Set extra g-code Z value
+								extraGcode.setValue('Z', to_string(positionRelativeZ - deltaZ + tempRelativeZ - relativeDifferenceZ));
+								
+							// Set extra g-code E value
+							extraGcode.setValue('E', to_string(positionRelativeE - deltaE + tempRelativeE - relativeDifferenceE));
+							// Send extra g-code to temp
+							temp << extraGcode << endl;
+						}
+						
+						// Otherwise check if plane changed
+						else if(changesPlane) {
+						
+							// Check if command has a Z value
+							if(gcode.hasValue('Z'))
+							
+								// Add to command's Z value
+								gcode.setValue('Z', to_string(stod(gcode.getValue('Z')) + getCurrentAdjustmentZ()));
+							
+							// Otherwise
+							else
+							
+								// Set command's Z value
+								gcode.setValue('Z', to_string(relativeDifferenceZ + deltaZ + getCurrentAdjustmentZ()));
+						}
+					}
+				}
+				
+				// Set previous gcode
+				previousGcode = gcode;
+			}
+			
+			// Otherwise check if command is G90
+			else if(gcode.hasValue('G') && gcode.getValue('G') == "90")
+				
+				// Clear relative mode
+				relativeMode = false;
+			
+			// Otherwise check if command is G91
+			else if(gcode.hasValue('G') && gcode.getValue('G') == "91")
+				
+				// Set relative mode
+				relativeMode = true;
+			
+			// Otherwise check if command is G92
+			else if(gcode.hasValue('G') && gcode.getValue('G') == "92") {
+			
+				// Check if line doesn't contain an X, Y, Z, and E
+				if(!gcode.hasValue('X') && !gcode.hasValue('Y') && !gcode.hasValue('Z') && !gcode.hasValue('E')) {
+				
+					// Set values to zero
+					gcode.setValue('X', "0");
+					gcode.setValue('Y', "0");
+					gcode.setValue('Z', "0");
+					gcode.setValue('E', "0");
+				}
+				
+				// Otherwise
+				else {
+				
+					// Set position relative values
+					positionRelativeX = !gcode.hasValue('X') ? positionRelativeX : stod(gcode.getValue('X'));
+					positionRelativeY = !gcode.hasValue('Y') ? positionRelativeY : stod(gcode.getValue('Y'));
+					positionRelativeZ = !gcode.hasValue('Z') ? positionRelativeZ : stod(gcode.getValue('Z'));
+					positionRelativeE = !gcode.hasValue('E') ? positionRelativeE : stod(gcode.getValue('E'));
+				}
+			}
+				
+			// Send line to temp
+			temp << gcode << endl;
+		}
+		
+		// Transfer contents of temp to processed file
+		temp.clear();
+		temp.seekg(0, ios::beg);
+		processedFile.close();
+		processedFile.open(workingFolderLocation + "/output.gcode", ios::out | ios::binary | ios::trunc);
+		processedFile << temp.rdbuf();
+		processedFile.close();
+		
+		// Delete temp
+		unlink((workingFolderLocation + "/temp").c_str());
+		
+		// Return true
+		return true;
+	}
+	
+	// Return false
+	return false;
+}
+
+bool Printer::thermalBondingPreprocessor() {
+
+	// Initialzie variables
+	string line;
+	Gcode gcode, previousGcode, refrenceGcode, tackPoint;
+	fstream processedFile(workingFolderLocation + "/output.gcode", ios::in | ios::binary);
+	fstream temp(workingFolderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
+	int layerCounter = 0, cornerCounter = 0;
+	bool checkSharpCorner = false;
+	bool relativeMode = true;
+	
+	// Check if temp file was opened successfully
+	if(processedFile.good() && temp.good()) {
+	
+		// Go through processed file
+		while(processedFile.peek() != EOF) {
+	
+			// Read in line
+			getline(processedFile, line);
+			
+			// Check if line is a layer command
+			if(line.find(";LAYER:") != string::npos) {
+			
+				// Check how many layers have been processed
+				switch(layerCounter) {
+			
+					// Check if layer counter is zero
+					case 0:
+				
+						// Send temperature command to temp
+						temp << "M109 S" << to_string(getBoundedTemperature(filamentTemperature + (filamentType == PLA ? 10 : 15))) << endl;
+						// Set check sharp corner
+						checkSharpCorner = true;
+					break;
+				
+					// Otherwise check if layer counter is one
+					case 1:
+				
+						// Send temperature command to temp
+						temp << "M109 S" << to_string(getBoundedTemperature(filamentTemperature + (filamentType == PLA ? 5 : 10))) << endl;
+					break;
+				}
+				
+				// Increment layer counter
+				layerCounter++;
+			}
+			
+			// Check if line is layer zero
+			if(line.find(";LAYER:0") != string::npos) {
+			
+				// Send temperature command to temp
+				temp << "M109 S" << to_string(filamentTemperature) << endl;
+				
+				// Clear check sharp corner
+				checkSharpCorner = false;
+			}
+			
+			// Check if line was parsed successfully and it's a G command and wave bonding is not being used
+			if(gcode.parseLine(line) && gcode.hasValue('G') && !useWaveBonding) {
+			
+				// Check what parameter is associated with the command
+				switch(stoi(gcode.getValue('G'))) {
+				
+					case 0:
+					case 1:
+					
+						// Check if previous command exists, the check sharp corner is set, and filament is ABS, HIPS, or PLA
+						if(!previousGcode.isEmpty() && checkSharpCorner && (filamentType == ABS || filamentType == HIPS || filamentType == PLA)) {
+							// Check if both counters are less than or equal to one
+							if(cornerCounter <= 1 && layerCounter <= 1) {
+							
+								// Check if sharp corner
+								if(isSharpCornerForThermalBonding(gcode, previousGcode)) {
+								
+									// Check if refrence g-codes is set
+									if(refrenceGcode.isEmpty()) {
+									
+										// Check if a tack point was created
+										tackPoint = createTackPoint(gcode, previousGcode);
+										if(!tackPoint.isEmpty())
+										
+											// Send tack point to temp
+											temp << tackPoint << endl;
+									}
+									
+									// Set refrence g-code
+									refrenceGcode = gcode;
+									
+									// Increment corner count
+									cornerCounter++;
+								}
+						
+							}
+							
+							// Otherwise check if corner counter is greater than one but layer counter isn't and sharp corner
+							else if(cornerCounter >= 1 && layerCounter <= 1 && isSharpCornerForThermalBonding(gcode, refrenceGcode)) {
+							
+								// Check if a tack point was created
+								tackPoint = createTackPoint(gcode, refrenceGcode);
+								if(!tackPoint.isEmpty())
+								
+									// Send tack point to temp
+									temp << tackPoint << endl;
+								
+								
+								// Set refrence g-code
+								refrenceGcode = gcode;
+							}
+						}
+					break;
+					
+					case 90:
+					
+						// Clear relative mode
+						relativeMode = false;
+					break;
+				
+					case 91:
+					
+						// Set relative mode
+						relativeMode = true;
+					break;
+				}
+			}
+			
+			// Set previous g-code
+			previousGcode = gcode;
+			
+			// Check if not using wave bonding, filament is ABS, command contains G and Z, and in absolute mode
+			if(!useWaveBonding && filamentType == ABS && gcode.hasValue('G') && gcode.hasValue('Z') && relativeMode)
+				
+				// Adjust g-code to have Z lower by height offset
+				gcode.setValue('Z', to_string(stod(gcode.getValue('Z')) + BONDING_HEIGHT_OFFSET));
+			
+			// Send g-code to temp
+			temp << gcode << endl;
+		}
+		
+		// Transfer contents of temp to processed file
+		temp.clear();
+		temp.seekg(0, ios::beg);
+		processedFile.close();
+		processedFile.open(workingFolderLocation + "/output.gcode", ios::out | ios::binary | ios::trunc);
+		processedFile << temp.rdbuf();
+		processedFile.close();
+		
+		// Delete temp
+		unlink((workingFolderLocation + "/temp").c_str());
+		
+		// Return true
+		return true;
+	}
+	
+	// Return false
+	return false;
+}
+
+bool Printer::bedCompensationPreprocessor() {
+
+	// Initialzie variables
+	string line;
+	Gcode gcode, extraGcode;
+	fstream processedFile(workingFolderLocation + "/output.gcode", ios::in | ios::binary);
+	fstream temp(workingFolderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
+	bool relativeMode = true;
+	bool changesPlane = false;
+	bool hasExtruded = false;
+	bool firstLayer = false;
+	bool addCommand = false;
+	double distance, storedE = 0, heightAdjustment, storedAdjustment, compensationE = 0;
+	uint32_t layerNumber = 0, segmentCounter;
+	double positionAbsoluteX = 0, positionAbsoluteY = 0, positionAbsoluteZ = 0, positionAbsoluteE = 0;
+	double positionRelativeX = 0, positionRelativeY = 0, positionRelativeZ = 0, positionRelativeE = 0;
+	double deltaX, deltaY, deltaZ, deltaE;
+	double absoluteDifferenceX, absoluteDifferenceY, relativeDifferenceX, relativeDifferenceY, relativeDifferenceZ, relativeDifferenceE;
+	double deltaRatioX, deltaRatioY, deltaRatioZ, deltaRatioE;
+	double tempAbsoluteX, tempAbsoluteY, tempRelativeX, tempRelativeY, tempRelativeZ, tempRelativeE;
+	double leftAdjustment, rightAdjustment;
+	
+	// Check if temp file was opened successfully
+	if(processedFile.good() && temp.good()) {
+	
+		// Go through processed file
+		while(processedFile.peek() != EOF) {
+	
+			// Read in line
+			getline(processedFile, line);
+			
+			// Check if line was parsed successfully, it's G0 or G1, and it isn't in relative mode
+			if(gcode.parseLine(line) && gcode.hasValue('G') && (gcode.getValue('G') == "0" || gcode.getValue('G') == "1") && !relativeMode) {
+			
+				// Check if command has an X or Y value
+				if(gcode.hasValue('X') || gcode.hasValue('X'))
+				
+					// Set changes plane
+					changesPlane = true;
+				
+				// Check if command contains a Z value
+				if(gcode.hasValue('Z'))
+				
+					// Add to command's Z value
+					gcode.setValue('Z', to_string(stod(gcode.getValue('Z')) + bedHeightOffset));
+				
+				// Set delta values
+				deltaX = !gcode.hasValue('X') ? 0 : stod(gcode.getValue('X')) - positionRelativeX;
+				deltaY = !gcode.hasValue('Y')? 0 : stod(gcode.getValue('Y')) - positionRelativeY;
+				deltaZ = !gcode.hasValue('Z') ? 0 : stod(gcode.getValue('Z')) - positionRelativeZ;
+				deltaE = !gcode.hasValue('E') ? 0 : stod(gcode.getValue('E')) - positionRelativeE;
+				
+				// Adjust position absolute and relative values for the changes
+				positionAbsoluteX += deltaX;
+				positionAbsoluteY += deltaY;
+				positionAbsoluteZ += deltaZ;
+				positionAbsoluteE += deltaE;
+				positionRelativeX += deltaX;
+				positionRelativeY += deltaY;
+				positionRelativeZ += deltaZ;
+				positionRelativeE += deltaE;
+				
+				// Check if Z has a noticable change
+				if(deltaZ != DBL_EPSILON) {
+				
+					// Set layer number
+					layerNumber = hasExtruded ? layerNumber + 1 : 1;
+					
+					// Set first layer
+					firstLayer = layerNumber == 0 || layerNumber == 1;
+				}
+				
+				// Calculate distance
+				distance = sqrt(deltaX * deltaX + deltaY * deltaY);
+				
+				// Set segment counter
+				segmentCounter = distance > SEGMENT_LENGTH ? distance / SEGMENT_LENGTH : 1;
+				
+				// Set absolute and relative differences
+				absoluteDifferenceX = positionAbsoluteX - deltaX;
+				absoluteDifferenceY = positionAbsoluteY - deltaY;
+				relativeDifferenceX = positionRelativeX - deltaX;
+				relativeDifferenceY = positionRelativeY - deltaY;
+				relativeDifferenceZ = positionRelativeZ - deltaZ;
+				relativeDifferenceE = positionRelativeE - deltaE;
+				
+				// Set delta ratios
+				deltaRatioX = deltaX / distance;
+				deltaRatioY = deltaY / distance;
+				deltaRatioZ = deltaZ / distance;
+				deltaRatioE = deltaE / distance;
+				
+				// Check if change in E is greater than 0
+				if(deltaE > 0) {
+				
+					// Set
+					addCommand = !hasExtruded;
+					
+					// Set has extruded
+					hasExtruded = true;
+				}
+				
+				// Check if add command
+				if(addCommand) {
+				
+					// Set extra g-code
+					extraGcode.clear();
+					extraGcode.setValue('G', "0");
+					extraGcode.setValue('E', "0");
+					
+					// Send extra g-code to temp
+					temp << extraGcode << endl;
+				}
+				
+				// Check if layer is targeted and change in E is greater than zero
+				if((firstLayer || !FIRST_LAYER_ONLY) && deltaE > 0) {
+				
+					// Go through all segments
+					for (uint32_t i = 1; i <= segmentCounter; i++) {
+				
+						// Check if at last segment
+						if(i == segmentCounter) {
+					
+							// Set temp values
+							tempAbsoluteX = positionAbsoluteX;
+							tempAbsoluteY = positionAbsoluteY;
+							tempRelativeX = positionRelativeX;
+							tempRelativeY = positionRelativeY;
+							tempRelativeZ = positionRelativeZ;
+							tempRelativeE = positionRelativeE;
+						}
+				
+						// Otherwise
+						else {
+					
+							// Set temp values
+							tempAbsoluteX = absoluteDifferenceX + i * SEGMENT_LENGTH * deltaRatioX;
+							tempAbsoluteY = absoluteDifferenceY + i * SEGMENT_LENGTH * deltaRatioY;
+							tempRelativeX = relativeDifferenceX + i * SEGMENT_LENGTH * deltaRatioX;
+							tempRelativeY = relativeDifferenceY + i * SEGMENT_LENGTH * deltaRatioY;
+							tempRelativeZ = relativeDifferenceZ + i * SEGMENT_LENGTH * deltaRatioZ;
+							tempRelativeE = relativeDifferenceE + i * SEGMENT_LENGTH * deltaRatioE;
+						}
+						
+						// Set height adjustment
+						heightAdjustment = getHeightAdjustmentRequired(tempAbsoluteX, tempAbsoluteY);
+						
+						// Check if set extrusion to compensate
+						if(CHANGE_EXTRUSION_TO_COMPENSATE)
+						
+							// Add value to compensation E
+							compensationE += (-heightAdjustment / CHANGE_IN_HEIGHT_THAT_DOUBLES_EXTRUSION) * (tempRelativeE - storedE);
+						
+						// Store adjustment
+						storedAdjustment = heightAdjustment;
+						
+						// Check if not at last segment
+						if(i != segmentCounter) {
+						
+							// Set extra g-code
+							extraGcode.clear();
+							extraGcode.setValue('G', gcode.getValue('G'));
+							
+							// Check if command has an X value
+							if(gcode.hasValue('X'))
+							
+								// Set extra g-code X value
+								extraGcode.setValue('X', to_string(positionRelativeX - deltaX + tempRelativeX - relativeDifferenceX));
+								
+							// Check if command has a Y value
+							if(gcode.hasValue('Y'))
+							
+								// Set extra g-code Y value
+								extraGcode.setValue('Y', to_string(positionRelativeY - deltaY + tempRelativeY - relativeDifferenceY));
+							
+							// Check if set to compensate Z and the plane changed
+							if(MOVE_Z_TO_COMPENSATE && changesPlane)
+							
+								// Set extra g-code Z value
+								extraGcode.setValue('Z', to_string(positionRelativeZ - deltaZ + tempRelativeZ - relativeDifferenceZ + storedAdjustment));
+							
+							// Otherwise check if command has a Z value and the change in Z in noticable
+							else if(gcode.hasValue('Z') && deltaZ != DBL_EPSILON)
+							
+								// Set extra g-code Z value
+								extraGcode.setValue('Z', to_string(positionRelativeZ - deltaZ + tempRelativeZ - relativeDifferenceZ));
+							
+							// Set extra g-gode E value
+							extraGcode.setValue('E', to_string(positionRelativeE - deltaE + tempRelativeE - relativeDifferenceE + compensationE));
+							
+							// Send extra g-code to temp
+							temp << extraGcode << endl;
+						}
+						
+						// Otherwise
+						else {
+						
+							// Check if set to compensate Z and the plane changed
+							if(MOVE_Z_TO_COMPENSATE && changesPlane) {
+							
+								// Check if command has a Z value
+								if(gcode.hasValue('Z'))
+								
+									// Add value to command Z value
+									gcode.setValue('Z', to_string(stod(gcode.getValue('Z')) + storedAdjustment));
+								
+								// Otherwise
+								else
+								
+									// Set command Z value
+									gcode.setValue('Z', to_string(relativeDifferenceZ + deltaZ + storedAdjustment));
+							}
+							
+							// Check if command has an E value
+							if(gcode.hasValue('E'))
+							
+								// Add value to command E value
+								gcode.setValue('E', to_string(stod(gcode.getValue('E')) + compensationE));
+						}
+						
+						// Store relative E
+						storedE = tempRelativeE;
+					}
+				}
+				
+				// Otherwise
+				else {
+				
+					// Check if set to compensate Z, the plane changed, and layer is targeted
+					if(MOVE_Z_TO_COMPENSATE && changesPlane && (firstLayer || !FIRST_LAYER_ONLY)) {
+					
+						// Set left and right adjustment
+						leftAdjustment = (backLeftOffset - frontLeftOffset) / LEVELLING_MOVE_Y * positionAbsoluteY + frontLeftOffset;
+						rightAdjustment = (backRightOffset - frontRightOffset) / LEVELLING_MOVE_Y * positionAbsoluteY + frontRightOffset;
+						
+						// Set stored adjustment
+						storedAdjustment = (rightAdjustment - leftAdjustment) / LEVELLING_MOVE_X * positionAbsoluteX + leftAdjustment;
+						
+						// Check if command has a Z value
+						if(gcode.hasValue('Z'))
+						
+							// Add value to command Z
+							gcode.setValue('Z', to_string(stod(gcode.getValue('Z')) + storedAdjustment));
+						
+						// Otherwise
+						else
+						
+							// Set command Z
+							gcode.setValue('Z', to_string(positionRelativeZ + storedAdjustment));
+					}
+					
+					// Check if command has an E value
+					if(gcode.hasValue('E'))
+					
+						// Add value to command E value
+						gcode.setValue('E', to_string(stod(gcode.getValue('E')) + compensationE));
+					
+					// Store relative E
+					storedE = positionRelativeE;
+				}
+			}
+			
+      			// Otherwise check if command is G90
+			else if(gcode.hasValue('G') && gcode.getValue('G') == "90")
+				
+				// Clear relative mode
+				relativeMode = false;
+			
+			// Otherwise check if command is G91
+			else if(gcode.hasValue('G') && gcode.getValue('G') == "91")
+				
+				// Set relative mode
+				relativeMode = true;
+			
+			// Otherwise check if command is G92
+			else if(gcode.hasValue('G') && gcode.getValue('G') == "92") {
+			
+				// Check if command doesn't have an X, Y, Z, and E value
+				if(!gcode.hasValue('X') && !gcode.hasValue('Y') && !gcode.hasValue('Z') && !gcode.hasValue('E')) {
+			
+					// Set command values to zero
+					gcode.setValue('X', "0");
+					gcode.setValue('Y', "0");
+					gcode.setValue('Z', "0");
+					gcode.setValue('E', "0");
+				}
+			
+				// Otherwise
+				else {
+			
+					// Set relative positions
+					positionRelativeX = !gcode.hasValue('X') ? positionRelativeX : stod(gcode.getValue('X'));
+					positionRelativeY = !gcode.hasValue('Y') ? positionRelativeY : stod(gcode.getValue('Y'));
+					positionRelativeZ = !gcode.hasValue('Z') ? positionRelativeZ : stod(gcode.getValue('Z'));
+					positionRelativeE = !gcode.hasValue('E') ? positionRelativeE : stod(gcode.getValue('E'));
+				}
+			}
+				
+			// Send line to temp
+			temp << gcode << endl;
+		}
+		
+		// Transfer contents of temp to processed file
+		temp.clear();
+		temp.seekg(0, ios::beg);
+		processedFile.close();
+		processedFile.open(workingFolderLocation + "/output.gcode", ios::out | ios::binary | ios::trunc);
+		processedFile << temp.rdbuf();
+		processedFile.close();
+		
+		// Delete temp
+		unlink((workingFolderLocation + "/temp").c_str());
+		
+		// Return true
+		return true;
+	}
+	
+	// Return false
+	return false;
+}
+
+bool Printer::backlashCompensationPreprocessor() {
+
+	// Initialzie variables
+	string line;
+	Gcode gcode, extraGcode;
+	fstream processedFile(workingFolderLocation + "/output.gcode", ios::in | ios::binary);
+	fstream temp(workingFolderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
+	bool relativeMode = true;
+	string valueF = "2000";
+	directions directionX, directionY, previousDirectionX = NEITHER, previousDirectionY = NEITHER;
+	double compensationX = 0, compensationY = 0;
+	double positionRelativeX = 0, positionRelativeY = 0, positionRelativeZ = 0, positionRelativeE = 0;
+	double deltaX, deltaY, deltaZ, deltaE;
+	
+	// Check if temp file was opened successfully
+	if(processedFile.good() && temp.good()) {
+	
+		// Go through processed file
+		while(processedFile.peek() != EOF) {
+	
+			// Read in line
+			getline(processedFile, line);
+			
+			// Check if line was parsed successfully, it's G0 or G1, and it isn't in relative mode
+			if(gcode.parseLine(line) && gcode.hasValue('G') && (gcode.getValue('G') == "0" || gcode.getValue('G') == "1") && !relativeMode) {
+			
+				// Check if command has an F value
+				if(gcode.hasValue('F'))
+			
+					// Set value F
+					valueF = gcode.getValue('F');
+				
+				// Set delta values
+				deltaX = !gcode.hasValue('X') ? 0 : stod(gcode.getValue('X')) - positionRelativeX;
+				deltaY = !gcode.hasValue('Y') ? 0 : stod(gcode.getValue('Y')) - positionRelativeY;
+				deltaZ = !gcode.hasValue('Z') ? 0 : stod(gcode.getValue('Z')) - positionRelativeZ;
+				deltaE = !gcode.hasValue('E') ? 0 : stod(gcode.getValue('E')) - positionRelativeE;
+				
+				// Set directions
+				directionX = deltaX > DBL_EPSILON ? POSITIVE : deltaX < -DBL_EPSILON ? NEGATIVE : previousDirectionX;
+				directionY = deltaY > DBL_EPSILON ? POSITIVE : deltaY < -DBL_EPSILON ? NEGATIVE : previousDirectionY;
+				
+				// Check if direction has changed
+				if((directionX != previousDirectionX && previousDirectionX != NEITHER) || (directionY != previousDirectionY && previousDirectionY != NEITHER)) {
+				
+					// Set extra g-code G value
+					extraGcode.clear();
+					extraGcode.setValue('G', gcode.getValue('G'));
+					
+					// Check if X direction has changed
+					if(directionX != previousDirectionX && previousDirectionX != NEITHER) {
+					
+						// Set X compensation
+						compensationX += backlashX * (directionX == POSITIVE ? 1 : -1);
+						
+						// Set extra g-code X value
+						extraGcode.setValue('X', to_string(positionRelativeX + compensationX));
+					}
+					
+					// Check if Y direction has changed
+					if(directionY != previousDirectionY && previousDirectionY != NEITHER) {
+					
+						// Set Y compensation
+						compensationY += backlashY * (directionY == POSITIVE ? 1 : -1);
+						
+						// Set extra g-code Y value
+						extraGcode.setValue('Y', to_string(positionRelativeY + compensationY));
+					}
+					
+					// Set extra g-code F value
+					extraGcode.setValue('F', "2900");
+					
+					// Send extra g-code to temp
+					temp << extraGcode << endl;
+					
+					// Set command's F value
+					gcode.setValue('F', valueF);
+				}
+			
+				// Check if command has an X value
+				if(gcode.hasValue('X'))
+			
+					// Add to command's X value
+					gcode.setValue('X', to_string(stod(gcode.getValue('X')) + compensationX));
+			
+				// Check if command has a Y value
+				if(gcode.hasValue('Y'))
+			
+					// Add to command's Y value
+					gcode.setValue('Y', to_string(stod(gcode.getValue('Y')) + compensationY));
+			
+				// Set relative values
+				positionRelativeX += deltaX;
+				positionRelativeY += deltaY;
+				positionRelativeZ += deltaZ;
+				positionRelativeE += deltaE;
+				
+				// Store directions
+				previousDirectionX = directionX;
+				previousDirectionY = directionY;
+			}
+			
+      			// Otherwise check if command is G90
+			else if(gcode.hasValue('G') && gcode.getValue('G') == "90")
+				
+				// Clear relative mode
+				relativeMode = false;
+			
+			// Otherwise check if command is G91
+			else if(gcode.hasValue('G') && gcode.getValue('G') == "91")
+				
+				// Set relative mode
+				relativeMode = true;
+			
+			// Otherwise check if command is G92
+			else if(gcode.hasValue('G') && gcode.getValue('G') == "92") {
+			
+				// Check if command doesn't have an X, Y, Z, and E value
+				if(!gcode.hasValue('X') && !gcode.hasValue('Y') && !gcode.hasValue('Z') && !gcode.hasValue('E')) {
+			
+					// Set command values to zero
+					gcode.setValue('X', "0");
+					gcode.setValue('Y', "0");
+					gcode.setValue('Z', "0");
+					gcode.setValue('E', "0");
+				}
+			
+				// Otherwise
+				else {
+			
+					// Set relative positions
+					positionRelativeX = !gcode.hasValue('X') ? positionRelativeX : stod(gcode.getValue('X'));
+					positionRelativeY = !gcode.hasValue('Y') ? positionRelativeY : stod(gcode.getValue('Y'));
+					positionRelativeZ = !gcode.hasValue('Z') ? positionRelativeZ : stod(gcode.getValue('Z'));
+					positionRelativeE = !gcode.hasValue('E') ? positionRelativeE : stod(gcode.getValue('E'));
+				}
+			}
+				
+			// Send line to temp
+			temp << gcode << endl;
+		}
+		
+		// Transfer contents of temp to processed file
+		temp.clear();
+		temp.seekg(0, ios::beg);
+		processedFile.close();
+		processedFile.open(workingFolderLocation + "/output.gcode", ios::out | ios::binary | ios::trunc);
+		processedFile << temp.rdbuf();
+		processedFile.close();
+		
+		// Delete temp
+		unlink((workingFolderLocation + "/temp").c_str());
+		
+		// Return true
+		return true;
+	}
+	
+	// Return false
+	return false;
+}
+
+bool Printer::feedRateConversionPreprocessor() {
+
+	// Initialzie variables
+	string line;
+	Gcode gcode;
+	fstream processedFile(workingFolderLocation + "/output.gcode", ios::in | ios::binary);
+	fstream temp(workingFolderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
+	double commandFeedRate;
+	
+	// Check if temp file was opened successfully
+	if(processedFile.good() && temp.good()) {
+	
+		// Go through processed file
+		while(processedFile.peek() != EOF) {
+	
+			// Read in line
+			getline(processedFile, line);
+			
+			// Check if line was parsed successfully and it contains G and F values
+			if(gcode.parseLine(line) && gcode.hasValue('G') && gcode.hasValue('F')) {
+			
+				// Get command's feedrate
+				commandFeedRate = stod(gcode.getValue('F')) / 60;
+				
+				// Force feed rate to adhere to limitations
+				if(commandFeedRate > MAX_FEED_RATE)
+                			commandFeedRate = MAX_FEED_RATE;
+                		
+                		// Calculate adjusted feed rate
+                		commandFeedRate = 30 + (1 - commandFeedRate / MAX_FEED_RATE) * 800;
+                		
+				// Set new feed rate for the command
+				gcode.setValue('F', to_string(commandFeedRate));
+			}
+				
+			// Send line to temp
+			temp << gcode << endl;
+		}
+		
+		// Transfer contents of temp to processed file
+		temp.clear();
+		temp.seekg(0, ios::beg);
+		processedFile.close();
+		processedFile.open(workingFolderLocation + "/output.gcode", ios::out | ios::binary | ios::trunc);
+		processedFile << temp.rdbuf();
+		processedFile.close();
+		
+		// Delete temp
+		unlink((workingFolderLocation + "/temp").c_str());
+		
+		// Return true
+		return true;
+	}
+	
+	// Return false
+	return false;
 }

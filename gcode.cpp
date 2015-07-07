@@ -735,6 +735,148 @@ bool Gcode::hasParameter(char identifier) const {
 	return false;
 }
 
+void Gcode::removeParameter(char identifier) {
+
+	// Check what parameter is set
+	switch(identifier) {
+		
+		case 'N':
+		
+			// Clear data type
+			dataType &= ~1;
+		
+			// Clear parameter value
+			parameterValue[0].clear();
+		break;
+		
+		case 'M':
+		
+			// Clear data type
+			dataType &= ~(1 << 1);
+		
+			// Clear parameter value
+			parameterValue[1].clear();
+		break;
+		
+		case 'G':
+		
+			// Clear data type
+			dataType &= ~(1 << 2);
+		
+			// Clear parameter value
+			parameterValue[2].clear();
+		break;
+		
+		case 'X':
+		
+			// Clear data type
+			dataType &= ~(1 << 3);
+		
+			// Clear parameter value
+			parameterValue[3].clear();
+		break;
+		
+		case 'Y':
+		
+			// Clear data type
+			dataType &= ~(1 << 4);
+		
+			// Clear parameter value
+			parameterValue[4].clear();
+		break;
+		
+		case 'Z':
+		
+			// Clear data type
+			dataType &= ~(1 << 5);
+		
+			// Clear parameter value
+			parameterValue[5].clear();
+		break;
+		
+		case 'E':
+		
+			// Clear data type
+			dataType &= ~(1 << 6);
+		
+			// Clear parameter value
+			parameterValue[6].clear();
+		break;
+		
+		case 'F':
+		
+			// Clear data type
+			dataType &= ~(1 << 8);
+		
+			// Clear parameter value
+			parameterValue[7].clear();
+		break;
+		
+		case 'T':
+		
+			// Clear data type
+			dataType &= ~(1 << 9);
+		
+			// Clear parameter value
+			parameterValue[8].clear();
+		break;
+		
+		case 'S':
+		
+			// Clear data type
+			dataType &= ~(1 << 10);
+		
+			// Clear parameter value
+			parameterValue[9].clear();
+		break;
+		
+		case 'P':
+		
+			// Clear data type
+			dataType &= ~(1 << 11);
+		
+			// Clear parameter value
+			parameterValue[10].clear();
+		break;
+		
+		case 'I':
+		
+			// Clear data type
+			dataType &= ~(1 << 16);
+		
+			// Clear parameter value
+			parameterValue[11].clear();
+		break;
+		
+		case 'J':
+		
+			// Clear data type
+			dataType &= ~(1 << 17);
+		
+			// Clear parameter value
+			parameterValue[12].clear();
+		break;
+		
+		case 'R':
+		
+			// Clear data type
+			dataType &= ~(1 << 18);
+		
+			// Clear parameter value
+			parameterValue[13].clear();
+		break;
+		
+		case 'D':
+		
+			// Clear data type
+			dataType &= ~(1 << 19);
+		
+			// Clear parameter value
+			parameterValue[14].clear();
+		break;
+	}
+}
+
 bool Gcode::hasValue(char identifier) const {
 
 	// Check what parameter is requested

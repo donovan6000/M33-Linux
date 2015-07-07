@@ -3,6 +3,12 @@ Copyright (c) 2015 donovan6000
 
 Changelog:
 
+V0.6 July &, 2015
+
+	* Moved all the pre-processor code to the printer library
+	* Added a CLI
+	* Added a validation pre-processor stage that removed M82, M82, and T commands
+
 V0.5 July 7, 2015
 
 	* Finished all the G-code pre-processor stages. So now it has preparation, wave bonding, thermal bonding, bed compensation, backlash, and feed rate stages that can be preformed on a provided G-code file. Right not it just defaults to applying all of them except the wave bonding stage, but I'll make a CLI soon to allow better configurations at run time.

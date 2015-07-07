@@ -36,4 +36,5 @@ sudo /etc/init.d/udev restart
 
 
 TODO:
+* Process the G-code data being sent before hand to prevent delays between consecutive commands
 * Maybe create a GUI

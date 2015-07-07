@@ -694,11 +694,9 @@ string Printer::receiveResponseBinary() {
 	// Get response
 	while(character != '\n') {
 		response.push_back(character);
+		usleep(50);
 		while(read(fd, &character, 1) == -1);
 	}
-	
-	// Remove newline character from response
-	response.pop_back();
 	
 	// Return response
 	return response;

@@ -237,17 +237,19 @@ int main(int argc, char *argv[]) {
 					cout << "Send: " << line << endl;
 					
 					// Get valid response
-					response = printer.receiveResponse();
-					if(line.substr(0, 2) == "G0" && response == "Info:Too small")
+					do {
 						response = printer.receiveResponse();
+						if(line.substr(0, 2) == "G0" && response == "Info:Too small")
+							response = printer.receiveResponse();
+					} while(response.empty());
 					
 					// Display response
 					cout << "Receive: " << response << endl << endl;
 				} while(response.substr(0, 2) != "ok");
-			
-				// Close processed file
-				processedFile.close();
 			}
+			
+			// Close processed file
+			processedFile.close();
 			
 			// Delete processed file
 			unlink((folderLocation + "/output.gcode").c_str());
@@ -291,9 +293,11 @@ int main(int argc, char *argv[]) {
 				cout << "Send: " << line << endl;
 				
 				// Get valid response
-				response = printer.receiveResponse();
-				if(line.substr(0, 2) == "G0" && response == "Info:Too small")
+				do {
 					response = printer.receiveResponse();
+					if(line.substr(0, 2) == "G0" && response == "Info:Too small")
+						response = printer.receiveResponse();
+				} while(response.empty());
 				
 				// Display response
 				cout << "Receive: " << response << endl << endl;

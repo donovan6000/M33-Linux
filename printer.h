@@ -93,6 +93,23 @@ class Printer {
 		Purpose: Receives data to the printer
 		*/
 		string receiveResponse();
+		
+		/*
+		Name: Get Backlash X and Y
+		Purpose: Gets printer's backlash values
+		*/
+		double getBacklashX();
+		double getBacklashY();
+		
+		/*
+		Name: Get Offsets Back Right, Back Left, Front Right, Front Left, and Bed Height 
+		Purpose: Gets printer's backlash values
+		*/
+		double getBackRightOffset();
+		double getBackLeftOffset();
+		double getFrontRightOffset();
+		double getFrontLeftOffset();
+		double getBedHeightOffset();
 	
 	// Private
 	private:

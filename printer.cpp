@@ -203,6 +203,7 @@ bool Printer::isFirmwareValid() {
 					// Return false
 					return false;
 		}
+		
 		// Return true
 		return true;
 	}
@@ -551,6 +552,48 @@ string Printer::receiveResponse() {
 
 	// Send data based on if in bootloader mode
 	return bootloaderMode ? receiveResponseAscii() : receiveResponseBinary();
+}
+
+double Printer::getBacklashX() {
+
+	// Return X backlash
+	return backlashX;
+}
+
+double Printer::getBacklashY() {
+
+	// Return Y backlash
+	return backlashY;
+}
+
+double Printer::getBackRightOffset() {
+
+	// Return back right offset
+	return backRightOffset;
+}
+
+double Printer::getBackLeftOffset() {
+
+	// Return back left offset
+	return backLeftOffset;
+}
+
+double Printer::getFrontRightOffset() {
+
+	// Return front right offset
+	return frontRightOffset;
+}
+
+double Printer::getFrontLeftOffset() {
+
+	// Return front left offset
+	return frontLeftOffset;
+}
+
+double Printer::getBedHeightOffset() {
+
+	// Return bed height offset
+	return bedHeightOffset;
 }
 
 bool Printer::sendRequestAscii(char data) {

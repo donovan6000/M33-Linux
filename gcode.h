@@ -96,6 +96,12 @@ class Gcode {
 		void setString(const string &value);
 		
 		/*
+		Name: Clear
+		Purpose: Resets G-code to initial state
+		*/
+		void clear();
+		
+		/*
 		Name: Is Parsed
 		Purpose: Returns if any G-code has been successfully parsed yet
 		*/

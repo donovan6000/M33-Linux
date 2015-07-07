@@ -24,16 +24,35 @@ double minXExtruder = DBL_MAX, minYExtruder = DBL_MAX, minZExtruder = DBL_MAX;
 double maxXExtruder = 0, maxYExtruder = 0, maxZExtruder = 0;
 double minFeedRate = 0, maxFeedRate = DBL_MAX;
 
-bool useBasicPreparation = false;
+bool useBasicPreparation = true;
 bool useWaveBonding = false;
-bool useThermalBonding = false;
-bool useBedCompensation = false;
-bool useBacklashCompensation = false;
-bool useFeedRateConversion = false;
+bool useThermalBonding = true;
+bool useBedCompensation = true;
+bool useBacklashCompensation = true;
+bool useFeedRateConversion = true;
 
-#define WAVE_PERIOD_QUARTER 1.25
-#define WAVE_SIZE 0.15;
+// Wave bonding
+#define WAVE_PERIOD 5
+#define WAVE_PERIOD_QUARTER WAVE_PERIOD / 4L
+#define WAVE_SIZE 0.15L
 
+// Thermal and wave bonding
+#define BONDING_HEIGHT_OFFSET -0.1L
+
+// Bed compensation
+#define CHANGE_IN_HEIGHT_THAT_DOUBLES_EXTRUSION 0.15L
+#define CHANGE_EXTRUSION_TO_COMPENSATE false
+#define FIRST_LAYER_ONLY false
+#define LEVELLING_MOVE_X 104.9L
+#define LEVELLING_MOVE_Y 103L
+#define MOVE_Z_TO_COMPENSATE true
+#define PROBE_Z_DISTANCE 55L
+#define SEGMENT_LENGTH 2L
+
+// Feed rate conversion
+#define MAX_FEED_RATE 60.0001L
+
+enum direction {POSITIVE, NEGATIVE, NEITHER};
 enum printTiers {LOW, MEDIUM, HIGH};
 
 
@@ -92,7 +111,7 @@ int main(int argc, char *argv[]) {
 	uint64_t totalLines = 0, lineCounter = 0;
 	
 	// Display version
-	cout << "M3D Linux V0.4" << endl;
+	cout << "M3D Linux V0.5" << endl;
 	
 	// Check if a file is provided
 	if(argc >= 2) {
@@ -190,7 +209,7 @@ int main(int argc, char *argv[]) {
 			}
 			processedFile.clear();
 			processedFile.seekg(0, ios::beg);
-		
+			
 			// Display message
 			cout << "Starting print" << endl;
 		
@@ -229,7 +248,7 @@ int main(int argc, char *argv[]) {
 				// Close processed file
 				processedFile.close();
 			}
-
+			
 			// Delete processed file
 			unlink((folderLocation + "/output.gcode").c_str());
 			
@@ -295,7 +314,7 @@ bool getPrintInformation() {
 	Gcode gcode;
 	fstream file(folderLocation + "/output.gcode", ios::in | ios::binary);
 	double localX = 54, localY = 60, localZ = 0, localE = 0, commandX, commandY, commandZ, commandE, commandF;
-	bool relativeMode = false, positiveExtrusion;
+	bool relativeMode = true, positiveExtrusion;
 	printTiers tier = LOW;
 	
 	// Check if file was opened successfully
@@ -472,8 +491,6 @@ bool getPrintInformation() {
 			}
 		}
 		
-		// Return if print doesn't go out of bounds
-		
 		// Return true
 		return true;
 	}
@@ -490,8 +507,14 @@ uint16_t getBoundedTemperature(uint16_t temperature) {
 
 double getDistance(const Gcode &firstPoint, const Gcode &secondPoint) {
 
+	// Initialize variables
+	double firstX = firstPoint.hasValue('X') ? stod(firstPoint.getValue('X')) : 0;
+	double firstY = firstPoint.hasValue('Y') ? stod(firstPoint.getValue('Y')) : 0;
+	double secondX = secondPoint.hasValue('X') ? stod(secondPoint.getValue('X')) : 0;
+	double secondY = secondPoint.hasValue('Y') ? stod(secondPoint.getValue('Y')) : 0;
+
 	// Return distance between the two values
-	return sqrt(pow(stod(firstPoint.getValue('X')) - stod(secondPoint.getValue('X')), 2) + pow(stod(firstPoint.getValue('Y')) - stod(secondPoint.getValue('Y')), 2));
+	return sqrt(pow(firstX - secondX, 2) + pow(firstY - secondY, 2));
 }
 
 Gcode createTackPoint(const Gcode &point, const Gcode &refrence) {
@@ -515,10 +538,10 @@ Gcode createTackPoint(const Gcode &point, const Gcode &refrence) {
 bool isSharpCornerForThermalBonding(const Gcode &point, const Gcode &refrence) {
 
 	// Initialize variables
-	double currentX = stod(point.getValue('X'));
-	double currentY = stod(point.getValue('Y'));
-	double previousX = stod(refrence.getValue('X'));
-	double previousY = stod(refrence.getValue('Y'));
+	double currentX = point.hasValue('X') ? stod(point.getValue('X')) : 0;
+	double currentY = point.hasValue('Y') ? stod(point.getValue('Y')) : 0;
+	double previousX = refrence.hasValue('X') ? stod(refrence.getValue('X')) : 0;
+	double previousY = refrence.hasValue('Y') ? stod(refrence.getValue('Y')) : 0;
 	
 	// Calculate value
 	double value = acos((currentX * previousX + currentY * previousY) / (pow(currentX * currentX + currentY * currentY, 2) * pow(previousX * previousX + previousY * previousY, 2)));
@@ -530,10 +553,10 @@ bool isSharpCornerForThermalBonding(const Gcode &point, const Gcode &refrence) {
 bool isSharpCornerForWaveBonding(const Gcode &point, const Gcode &refrence) {
 
 	// Initialize variables
-	double currentX = stod(point.getValue('X'));
-	double currentY = stod(point.getValue('Y'));
-	double previousX = stod(refrence.getValue('X'));
-	double previousY = stod(refrence.getValue('Y'));
+	double currentX = point.hasValue('X') ? stod(point.getValue('X')) : 0;
+	double currentY = point.hasValue('Y') ? stod(point.getValue('Y')) : 0;
+	double previousX = refrence.hasValue('X') ? stod(refrence.getValue('X')) : 0;
+	double previousY = refrence.hasValue('Y') ? stod(refrence.getValue('Y')) : 0;
 	
 	// Calculate value
 	double value = acos((currentX * previousX + currentY + previousY) / (pow(currentX * currentX + currentY + currentY, 2) * pow(previousX * previousX + previousY + previousY, 2)));
@@ -542,40 +565,29 @@ bool isSharpCornerForWaveBonding(const Gcode &point, const Gcode &refrence) {
 	return value > 0 && value < M_PI_2;
 }
 
-/*void ProcessForTackPoints(GCodeWriter output_writer, const GCode &point, const GCode &refrence, GCode &lastTackPoint, int cornercount) {
-
-	// Initialize variables
-	Gcode tackPoint;
-	if(cornercount <= 1 && isSharpCornerForWave(point, refrence)) {
-		if(lastTackPoint.empty()) {
-			tackPoint = createTackPoint(point, refrence);
-			if(!tackPoint.empty())
-				temp << tackPoint << endl; 
-		}
-		lastTackPoint = point;
-		cornercount++;
-	}
-	else if(cornercount >= 1 && isSharpCornerForWave(point, lastTackPoint)) {
-		tackPoint = createTackPoint(point, lastTackPoint);
-		if(!tackPoint.empty())
-			temp << tackPoint << endl; 
-		lastTackPoint = point;
-	}
-}*/
-
-float getCurrentAdjustmentZ() {
+double getCurrentAdjustmentZ() {
 
 	// Initialize variables
 	static uint8_t waveStep = 0;
 
 	// Set adjustment
-	float adjustment = waveStep ? waveStep != 2 ? 0 : -1.5 : 1;
+	double adjustment = waveStep ? waveStep != 2 ? 0 : -1.5 : 1;
 	
 	// Increment wave step
 	waveStep = (waveStep + 1) % 4;
 	
 	// Return adjustment
 	return adjustment * WAVE_SIZE;
+}
+
+double getHeightAdjustmentRequired(double x, double y) {
+
+	// Initialize variables
+	double left = (printer.getBackLeftOffset() - printer.getFrontLeftOffset()) / LEVELLING_MOVE_Y;
+	double right = (printer.getBackRightOffset() - printer.getFrontRightOffset()) / LEVELLING_MOVE_Y;
+	
+	// Return height adjustment
+	return (right * y + printer.getFrontRightOffset() - (left * y + printer.getFrontLeftOffset())) / LEVELLING_MOVE_X * x + (left * y + printer.getFrontLeftOffset());
 }
 
 bool basicPreparationPreprocessor() {
@@ -605,6 +617,7 @@ bool basicPreparationPreprocessor() {
 		temp << "G92 E0" << endl;
 		temp << "G90" << endl;
 		temp << "G0 F2400" << endl;
+		temp << "; can extrude" << endl;
 	
 		// Go through processed file
 		while(processedFile.peek() != EOF) {
@@ -668,16 +681,19 @@ bool waveBondingPreprocessor() {
 
 	// Initialzie variables
 	string line;
-	Gcode gcode, previousGcode, refrenceGcode, tackPoint;
+	Gcode gcode, previousGcode, refrenceGcode, tackPoint, extraGcode;
 	fstream processedFile(folderLocation + "/output.gcode", ios::in | ios::binary);
 	fstream temp(folderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
-	int num = 0;
 	bool relativeMode = true;
-	bool flag2 = true;
-	bool flag3 = false;
-	//Position position = new Position();
-	float num5 = 0;
-	int cornercount = 0;
+	bool firstLayer = true, changesPlane = false;
+	uint32_t cornerCounter = 0, layerNumber, baseLayer = 0, waveRatio;
+	double distance;
+	double positionAbsoluteX = 0, positionAbsoluteY = 0, positionAbsoluteZ = 0, positionAbsoluteE = 0;
+	double positionRelativeX = 0, positionRelativeY = 0, positionRelativeZ = 0, positionRelativeE = 0;
+	double deltaX, deltaY, deltaZ, deltaE;
+	double tempRelativeX, tempRelativeY, tempRelativeZ, tempRelativeE;
+	double relativeDifferenceX, relativeDifferenceY, relativeDifferenceZ, relativeDifferenceE;
+	double deltaRatioX, deltaRatioY, deltaRatioZ, deltaRatioE;
 	
 	// Check if temp file was opened successfully
 	if(processedFile.good() && temp.good()) {
@@ -690,115 +706,201 @@ bool waveBondingPreprocessor() {
 			
 			// Check if line is a layer command
 			if(line.find(";LAYER:") != string::npos) {
-				int num7 = stoi(line.substr(7));
-				if (num7 < num)
-				num = num7;
-				flag2 = num7 == num;
+			
+				// Set layer number
+				layerNumber = stoi(line.substr(7));
+				
+				// Set base number is layer number is less than it
+				if(layerNumber < baseLayer)
+					baseLayer = layerNumber;
+				
+				// Set first layer
+				firstLayer = layerNumber == baseLayer;
 			}
 			
-			if(gcode.parseLine(line) && (gcode.getValue('G') == "0" || gcode.getValue('G') == "1") && !relativeMode) {
-				/*if (currLine.hasX || currLine.hasY)
-					flag3 = true;
-				if (currLine.hasZ && flag2)
-					currLine.Z += -0.1f;
+			// Check is line was parsed, it contains G0 or G1, and it's not in relative mode
+			if(gcode.parseLine(line) && gcode.hasValue('G') && (gcode.getValue('G') == "0" || gcode.getValue('G') == "1") && !relativeMode) {
+			
+				// Check if line contains an X or Y value
+				if(gcode.hasValue('X') || gcode.hasValue('Y'))
+				
+					// Set changes plane
+					changesPlane = true;
+				
+				// Check if line contains a Z value and is in the first layer
+				if(gcode.hasValue('Z') && firstLayer)
+				
+					// Adjust Z value by height offset
+					gcode.setValue('Z', to_string(stod(gcode.getValue('Z')) + BONDING_HEIGHT_OFFSET));
+				
+				// Set delta values
+				deltaX = !gcode.hasValue('X') ? 0 : stod(gcode.getValue('X')) - positionRelativeX;
+				deltaY = !gcode.hasValue('Y')? 0 : stod(gcode.getValue('Y')) - positionRelativeY;
+				deltaZ = !gcode.hasValue('Z') ? 0 : stod(gcode.getValue('Z')) - positionRelativeZ;
+				deltaE = !gcode.hasValue('E') ? 0 : stod(gcode.getValue('E')) - positionRelativeE;
+				
+				// Adjust position absolute and relative values for the changes
+				positionAbsoluteX += deltaX;
+				positionAbsoluteY += deltaY;
+				positionAbsoluteZ += deltaZ;
+				positionAbsoluteE += deltaE;
+				positionRelativeX += deltaX;
+				positionRelativeY += deltaY;
+				positionRelativeZ += deltaZ;
+				positionRelativeE += deltaE;
+				
+				// Calculate distance of change
+				distance = sqrt(deltaX * deltaX + deltaY * deltaY);
+				
+				// Set wave ratio
+				waveRatio = distance > WAVE_PERIOD_QUARTER ? distance / WAVE_PERIOD_QUARTER : 1;
+				
+				// Set relative differences
+				relativeDifferenceX = positionRelativeX - deltaX;
+				relativeDifferenceY = positionRelativeY - deltaY;
+				relativeDifferenceZ = positionRelativeZ - deltaZ;
+				relativeDifferenceE = positionRelativeE - deltaE;
+				
+				// Set delta ratios
+				deltaRatioX = deltaX / distance;
+				deltaRatioY = deltaY / distance;
+				deltaRatioZ = deltaZ / distance;
+				deltaRatioE = deltaE / distance;
+				
+				// Check if in first dayer and delta E is greater than zero 
+				if(firstLayer && deltaE > 0) {
+				
+					// Check if previous g-code is not empty
+					if(!previousGcode.isEmpty()) {
 					
-				float num8 = !currLine.hasX ? 0f : (currLine.X - position.relativeX);
-				float num9 = !currLine.hasY ? 0f : (currLine.Y - position.relativeY);
-				float num10 = !currLine.hasZ ? 0f : (currLine.Z - position.relativeZ);
-				float num11 = !currLine.hasE ? 0f : (currLine.E - position.relativeE);
-				position.absoluteX += num8;
-				position.absoluteY += num9;
-				position.absoluteZ += num10;
-				position.absoluteE += num11;
-				position.relativeX += num8;
-				position.relativeY += num9;
-				position.relativeZ += num10;
-				position.relativeE += num11;
-				if (currLine.hasF)
-					position.F = currLine.F;
-				float num12 = (float) Math.Sqrt((double) ((num8 * num8) + (num9 * num9)));
-				int num13 = 1;
-				if (num12 > WAVE_PERIOD_QUARTER)
-					num13 = (int) (num12 / WAVE_PERIOD_QUARTER);
-				float num14 = position.absoluteX - num8;
-				float num15 = position.absoluteY - num9;
-				float num16 = position.relativeX - num8;
-				float num17 = position.relativeY - num9;
-				float num18 = position.relativeZ - num10;
-				float num19 = position.relativeE - num11;
-				float num20 = num8 / num12;
-				float num21 = num9 / num12;
-				float num22 = num10 / num12;
-				float num23 = num11 / num12;
-				if (flag2 && (num11 > 0f)) {
-					if (prevLine != null)
-						this.ProcessForTackPoints(output_writer, currLine, prevLine, ref code3, ref cornercount);
-					for (int i = 1; i < (num13 + 1); i++) {
-						float relativeX;
-						float relativeY;
-						float relativeZ;
-						float relativeE;
-						if (i == num13) {
-							float absoluteX = position.absoluteX;
-							float absoluteY = position.absoluteY;
-							relativeX = position.relativeX;
-							relativeY = position.relativeY;
-							relativeZ = position.relativeZ;
-							relativeE = position.relativeE;
-						}
-						else {
-							relativeX = num16 + ((i * WAVE_PERIOD_QUARTER) * num20);
-							relativeY = num17 + ((i * WAVE_PERIOD_QUARTER) * num21);
-							relativeZ = num18 + ((i * WAVE_PERIOD_QUARTER) * num22);
-							relativeE = num19 + ((i * WAVE_PERIOD_QUARTER) * num23);
-						}
-						float num29 = relativeE - num5;
-						if (i != num13) {
-							GCode code = new GCode {
-								G = currLine.G
-							};
-							if (currLine.hasX)
-								code.X = (position.relativeX - num8) + (relativeX - num16);
-							if (currLine.hasY)
-								code.Y = (position.relativeY - num9) + (relativeY - num17);
-							if (flag3)
-								code.Z = ((position.relativeZ - num10) + (relativeZ - num18)) + this.CurrentAdjustmentsZ;
-							else if (currLine.hasZ && ((num10 > float.Epsilon) || (num10 < -1.401298E-45f)))
-								code.Z = (position.relativeZ - num10) + (relativeZ - num18);
+						// Check if corner count is at most one and sharp corner
+						if(cornerCounter <= 1 && isSharpCornerForWaveBonding(gcode, previousGcode)) {
 						
-							code.E = ((position.relativeE - num11) + (relativeE - num19));
-							output_writer.Write(code);
-						}
-						else {
-							if (flag3) {
-								if (currLine.hasZ)
-									currLine.Z += this.CurrentAdjustmentsZ;
-								else
-									currLine.Z = (num18 + num10) + this.CurrentAdjustmentsZ;
+							// Check if refrence g-codes is set
+							if(refrenceGcode.isEmpty()) {
+							
+								// Check if a tack point was created
+								tackPoint = createTackPoint(gcode, previousGcode);
+								if(!tackPoint.isEmpty())
+								
+									// Send tack point to temp
+									temp << tackPoint << endl; 
 							}
+							
+							// Set refrence g-code
+							refrenceGcode = gcode;
+							
+							// Increment corner counter
+							cornerCounter++;
 						}
-						num5 = relativeE;
+						
+						// Otherwise check is corner count is at least one and sharp corner
+						else if(cornerCounter >= 1 && isSharpCornerForWaveBonding(gcode, refrenceGcode)) {
+						
+							// Check if a tack point was created
+							tackPoint = createTackPoint(gcode, refrenceGcode);
+							if(!tackPoint.isEmpty())
+							
+								// Send tack point to temp
+								temp << tackPoint << endl; 
+							
+							// Set refrence g-code
+							refrenceGcode = gcode;
+						}
 					}
-				}*/
+					
+					// Go through all of the wave
+					for(uint32_t i = 1; i <= waveRatio; i++) {
+					
+						// Check if at last component
+						if(i == waveRatio) {
+						
+							// Set temp relative values
+							tempRelativeX = positionRelativeX;
+							tempRelativeY = positionRelativeY;
+							tempRelativeZ = positionRelativeZ;
+							tempRelativeE = positionRelativeE;
+						}
+						
+						// Otherwise
+						else {
+						
+							// Set temp relative values
+							tempRelativeX = relativeDifferenceX + i * WAVE_PERIOD_QUARTER * deltaRatioX;
+							tempRelativeY = relativeDifferenceY + i * WAVE_PERIOD_QUARTER * deltaRatioY;
+							tempRelativeZ = relativeDifferenceZ + i * WAVE_PERIOD_QUARTER * deltaRatioZ;
+							tempRelativeE = relativeDifferenceE + i * WAVE_PERIOD_QUARTER * deltaRatioE;
+						}
+						
+						// Check if not at least component
+						if(i != waveRatio) {
+						
+							// Set extra g-code G value
+							extraGcode.clear();
+							extraGcode.setValue('G', gcode.getValue('G'));
+							
+							// Set extra g-code X value
+							if(gcode.hasValue('X'))
+								extraGcode.setValue('X', to_string(positionRelativeX - deltaX + tempRelativeX - relativeDifferenceX));
+							
+							// Set extra g-cdoe Y value
+							if(gcode.hasValue('Y'))
+								extraGcode.setValue('Y', to_string(positionRelativeY - deltaY + tempRelativeY - relativeDifferenceY));
+							
+							// Check if plane changed
+							if(changesPlane)
+							
+								// Set extra g-code Z value
+								extraGcode.setValue('Z', to_string(positionRelativeZ - deltaZ + tempRelativeZ - relativeDifferenceZ + getCurrentAdjustmentZ()));
+							
+							// Otherwise check if command has a Z value and changes in Z are noticable
+							else if(gcode.hasValue('Z') && deltaZ != DBL_EPSILON)
+							
+								// Set extra g-code Z value
+								extraGcode.setValue('Z', to_string(positionRelativeZ - deltaZ + tempRelativeZ - relativeDifferenceZ));
+								
+							// Set extra g-code E value
+							extraGcode.setValue('E', to_string(positionRelativeE - deltaE + tempRelativeE - relativeDifferenceE));
+							// Send extra g-code to temp
+							temp << extraGcode << endl;
+						}
+						
+						// Otherwise check if plane changed
+						else if(changesPlane) {
+						
+							// Check if command has a Z value
+							if(gcode.hasValue('Z'))
+							
+								// Add to command's Z value
+								gcode.setValue('Z', to_string(stod(gcode.getValue('Z')) + getCurrentAdjustmentZ()));
+							
+							// Otherwise
+							else
+							
+								// Set command's Z value
+								gcode.setValue('Z', to_string(relativeDifferenceZ + deltaZ + getCurrentAdjustmentZ()));
+						}
+					}
+				}
 				
 				// Set previous gcode
 				previousGcode = gcode;
 			}
 			
 			// Otherwise check if command is G90
-			else if(gcode.getValue('G') == "90")
+			else if(gcode.hasValue('G') && gcode.getValue('G') == "90")
 				
 				// Clear relative mode
 				relativeMode = false;
 			
 			// Otherwise check if command is G91
-			else if(gcode.getValue('G') == "91")
+			else if(gcode.hasValue('G') && gcode.getValue('G') == "91")
 				
 				// Set relative mode
 				relativeMode = true;
 			
 			// Otherwise check if command is G92
-			else if(gcode.getValue('G') == "92") {
+			else if(gcode.hasValue('G') && gcode.getValue('G') == "92") {
 			
 				// Check if line doesn't contain an X, Y, Z, and E
 				if(!gcode.hasValue('X') && !gcode.hasValue('Y') && !gcode.hasValue('Z') && !gcode.hasValue('E')) {
@@ -812,10 +914,12 @@ bool waveBondingPreprocessor() {
 				
 				// Otherwise
 				else {
-					/*position.relativeX = !gcode.hasValue('X') ? position.relativeX : gcode.getValue('X');
-					position.relativeY = !gcode.hasValue('Y') ? position.relativeY : gcode.getValue('Y');
-					position.relativeZ = !gcode.hasValue('Z') ? position.relativeZ : gcode.getValue('Z');
-					position.relativeE = !gcode.hasValue('E') ? position.relativeE : gcode.getValue('E');*/
+				
+					// Set position relative values
+					positionRelativeX = !gcode.hasValue('X') ? positionRelativeX : stod(gcode.getValue('X'));
+					positionRelativeY = !gcode.hasValue('Y') ? positionRelativeY : stod(gcode.getValue('Y'));
+					positionRelativeZ = !gcode.hasValue('Z') ? positionRelativeZ : stod(gcode.getValue('Z'));
+					positionRelativeE = !gcode.hasValue('E') ? positionRelativeE : stod(gcode.getValue('E'));
 				}
 			}
 				
@@ -851,7 +955,7 @@ bool thermalBondingPreprocessor() {
 	fstream temp(folderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
 	int layerCounter = 0, cornerCounter = 0;
 	bool checkSharpCorner = false;
-	bool relativeMode = false;
+	bool relativeMode = true;
 	
 	// Check if temp file was opened successfully
 	if(processedFile.good() && temp.good()) {
@@ -973,8 +1077,8 @@ bool thermalBondingPreprocessor() {
 			// Check if not using wave bonding, filament is ABS, command contains G and Z, and in absolute mode
 			if(!useWaveBonding && filament == ABS && gcode.hasValue('G') && gcode.hasValue('Z') && relativeMode)
 				
-				// Adjust g-code to have Z lower by 0.1
-				gcode.setValue('Z', to_string(stod(gcode.getValue('Z')) - 0.1));
+				// Adjust g-code to have Z lower by height offset
+				gcode.setValue('Z', to_string(stod(gcode.getValue('Z')) + BONDING_HEIGHT_OFFSET));
 			
 			// Send g-code to temp
 			temp << gcode << endl;
@@ -1003,9 +1107,23 @@ bool bedCompensationPreprocessor() {
 
 	// Initialzie variables
 	string line;
-	Gcode gcode;
+	Gcode gcode, extraGcode;
 	fstream processedFile(folderLocation + "/output.gcode", ios::in | ios::binary);
 	fstream temp(folderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
+	bool relativeMode = true;
+	bool changesPlane = false;
+	bool hasExtruded = false;
+	bool firstLayer = false;
+	bool addCommand = false;
+	double distance, storedE = 0, heightAdjustment, storedAdjustment, compensationE = 0;
+	uint32_t layerNumber = 0, segmentCounter;
+	double positionAbsoluteX = 0, positionAbsoluteY = 0, positionAbsoluteZ = 0, positionAbsoluteE = 0;
+	double positionRelativeX = 0, positionRelativeY = 0, positionRelativeZ = 0, positionRelativeE = 0;
+	double deltaX, deltaY, deltaZ, deltaE;
+	double absoluteDifferenceX, absoluteDifferenceY, relativeDifferenceX, relativeDifferenceY, relativeDifferenceZ, relativeDifferenceE;
+	double deltaRatioX, deltaRatioY, deltaRatioZ, deltaRatioE;
+	double tempAbsoluteX, tempAbsoluteY, tempRelativeX, tempRelativeY, tempRelativeZ, tempRelativeE;
+	double leftAdjustment, rightAdjustment;
 	
 	// Check if temp file was opened successfully
 	if(processedFile.good() && temp.good()) {
@@ -1016,8 +1134,272 @@ bool bedCompensationPreprocessor() {
 			// Read in line
 			getline(processedFile, line);
 			
-			// Check if line was parsed successfully
-			gcode.parseLine(line);
+			// Check if line was parsed successfully, it's G0 or G1, and it isn't in relative mode
+			if(gcode.parseLine(line) && gcode.hasValue('G') && (gcode.getValue('G') == "0" || gcode.getValue('G') == "1") && !relativeMode) {
+			
+				// Check if command has an X or Y value
+				if(gcode.hasValue('X') || gcode.hasValue('X'))
+				
+					// Set changes plane
+					changesPlane = true;
+				
+				// Check if command contains a Z value
+				if(gcode.hasValue('Z'))
+				
+					// Add to command's Z value
+					gcode.setValue('Z', to_string(stod(gcode.getValue('Z')) + printer.getBedHeightOffset()));
+				
+				// Set delta values
+				deltaX = !gcode.hasValue('X') ? 0 : stod(gcode.getValue('X')) - positionRelativeX;
+				deltaY = !gcode.hasValue('Y')? 0 : stod(gcode.getValue('Y')) - positionRelativeY;
+				deltaZ = !gcode.hasValue('Z') ? 0 : stod(gcode.getValue('Z')) - positionRelativeZ;
+				deltaE = !gcode.hasValue('E') ? 0 : stod(gcode.getValue('E')) - positionRelativeE;
+				
+				// Adjust position absolute and relative values for the changes
+				positionAbsoluteX += deltaX;
+				positionAbsoluteY += deltaY;
+				positionAbsoluteZ += deltaZ;
+				positionAbsoluteE += deltaE;
+				positionRelativeX += deltaX;
+				positionRelativeY += deltaY;
+				positionRelativeZ += deltaZ;
+				positionRelativeE += deltaE;
+				
+				// Check if Z has a noticable change
+				if(deltaZ != DBL_EPSILON) {
+				
+					// Set layer number
+					layerNumber = hasExtruded ? layerNumber + 1 : 1;
+					
+					// Set first layer
+					firstLayer = layerNumber == 0 || layerNumber == 1;
+				}
+				
+				// Calculate distance
+				distance = sqrt(deltaX * deltaX + deltaY * deltaY);
+				
+				// Set segment counter
+				segmentCounter = distance > SEGMENT_LENGTH ? distance / SEGMENT_LENGTH : 1;
+				
+				// Set absolute and relative differences
+				absoluteDifferenceX = positionAbsoluteX - deltaX;
+				absoluteDifferenceY = positionAbsoluteY - deltaY;
+				relativeDifferenceX = positionRelativeX - deltaX;
+				relativeDifferenceY = positionRelativeY - deltaY;
+				relativeDifferenceZ = positionRelativeZ - deltaZ;
+				relativeDifferenceE = positionRelativeE - deltaE;
+				
+				// Set delta ratios
+				deltaRatioX = deltaX / distance;
+				deltaRatioY = deltaY / distance;
+				deltaRatioZ = deltaZ / distance;
+				deltaRatioE = deltaE / distance;
+				
+				// Check if change in E is greater than 0
+				if(deltaE > 0) {
+				
+					// Set
+					addCommand = !hasExtruded;
+					
+					// Set has extruded
+					hasExtruded = true;
+				}
+				
+				// Check if add command
+				if(addCommand) {
+				
+					// Set extra g-code
+					extraGcode.clear();
+					extraGcode.setValue('G', "0");
+					extraGcode.setValue('E', "0");
+					
+					// Send extra g-code to temp
+					temp << extraGcode << endl;
+				}
+				
+				// Check if layer is targeted and change in E is greater than zero
+				if((firstLayer || !FIRST_LAYER_ONLY) && deltaE > 0) {
+				
+					// Go through all segments
+					for (uint32_t i = 1; i <= segmentCounter; i++) {
+				
+						// Check if at last segment
+						if(i == segmentCounter) {
+					
+							// Set temp values
+							tempAbsoluteX = positionAbsoluteX;
+							tempAbsoluteY = positionAbsoluteY;
+							tempRelativeX = positionRelativeX;
+							tempRelativeY = positionRelativeY;
+							tempRelativeZ = positionRelativeZ;
+							tempRelativeE = positionRelativeE;
+						}
+				
+						// Otherwise
+						else {
+					
+							// Set temp values
+							tempAbsoluteX = absoluteDifferenceX + i * SEGMENT_LENGTH * deltaRatioX;
+							tempAbsoluteY = absoluteDifferenceY + i * SEGMENT_LENGTH * deltaRatioY;
+							tempRelativeX = relativeDifferenceX + i * SEGMENT_LENGTH * deltaRatioX;
+							tempRelativeY = relativeDifferenceY + i * SEGMENT_LENGTH * deltaRatioY;
+							tempRelativeZ = relativeDifferenceZ + i * SEGMENT_LENGTH * deltaRatioZ;
+							tempRelativeE = relativeDifferenceE + i * SEGMENT_LENGTH * deltaRatioE;
+						}
+						
+						// Set height adjustment
+						heightAdjustment = getHeightAdjustmentRequired(tempAbsoluteX, tempAbsoluteY);
+						
+						// Check if set extrusion to compensate
+						if(CHANGE_EXTRUSION_TO_COMPENSATE)
+						
+							// Add value to compensation E
+							compensationE += (-heightAdjustment / CHANGE_IN_HEIGHT_THAT_DOUBLES_EXTRUSION) * (tempRelativeE - storedE);
+						
+						// Store adjustment
+						storedAdjustment = heightAdjustment;
+						
+						// Check if not at last segment
+						if(i != segmentCounter) {
+						
+							// Set extra g-code
+							extraGcode.clear();
+							extraGcode.setValue('G', gcode.getValue('G'));
+							
+							// Check if command has an X value
+							if(gcode.hasValue('X'))
+							
+								// Set extra g-code X value
+								extraGcode.setValue('X', to_string(positionRelativeX - deltaX + tempRelativeX - relativeDifferenceX));
+								
+							// Check if command has a Y value
+							if(gcode.hasValue('Y'))
+							
+								// Set extra g-code Y value
+								extraGcode.setValue('Y', to_string(positionRelativeY - deltaY + tempRelativeY - relativeDifferenceY));
+							
+							// Check if set to compensate Z and the plane changed
+							if(MOVE_Z_TO_COMPENSATE && changesPlane)
+							
+								// Set extra g-code Z value
+								extraGcode.setValue('Z', to_string(positionRelativeZ - deltaZ + tempRelativeZ - relativeDifferenceZ + storedAdjustment));
+							
+							// Otherwise check if command has a Z value and the change in Z in noticable
+							else if(gcode.hasValue('Z') && deltaZ != DBL_EPSILON)
+							
+								// Set extra g-code Z value
+								extraGcode.setValue('Z', to_string(positionRelativeZ - deltaZ + tempRelativeZ - relativeDifferenceZ));
+							
+							// Set extra g-gode E value
+							extraGcode.setValue('E', to_string(positionRelativeE - deltaE + tempRelativeE - relativeDifferenceE + compensationE));
+							
+							// Send extra g-code to temp
+							temp << extraGcode << endl;
+						}
+						
+						// Otherwise
+						else {
+						
+							// Check if set to compensate Z and the plane changed
+							if(MOVE_Z_TO_COMPENSATE && changesPlane) {
+							
+								// Check if command has a Z value
+								if(gcode.hasValue('Z'))
+								
+									// Add value to command Z value
+									gcode.setValue('Z', to_string(stod(gcode.getValue('Z')) + storedAdjustment));
+								
+								// Otherwise
+								else
+								
+									// Set command Z value
+									gcode.setValue('Z', to_string(relativeDifferenceZ + deltaZ + storedAdjustment));
+							}
+							
+							// Check if command has an E value
+							if(gcode.hasValue('E'))
+							
+								// Add value to command E value
+								gcode.setValue('E', to_string(stod(gcode.getValue('E')) + compensationE));
+						}
+						
+						// Store relative E
+						storedE = tempRelativeE;
+					}
+				}
+				
+				// Otherwise
+				else {
+				
+					// Check if set to compensate Z, the plane changed, and layer is targeted
+					if(MOVE_Z_TO_COMPENSATE && changesPlane && (firstLayer || !FIRST_LAYER_ONLY)) {
+					
+						// Set left and right adjustment
+						leftAdjustment = (printer.getBackLeftOffset() - printer.getFrontLeftOffset()) / LEVELLING_MOVE_Y * positionAbsoluteY + printer.getFrontLeftOffset();
+						rightAdjustment = (printer.getBackRightOffset() - printer.getFrontRightOffset()) / LEVELLING_MOVE_Y * positionAbsoluteY + printer.getFrontRightOffset();
+						
+						// Set stored adjustment
+						storedAdjustment = (rightAdjustment - leftAdjustment) / LEVELLING_MOVE_X * positionAbsoluteX + leftAdjustment;
+						
+						// Check if command has a Z value
+						if(gcode.hasValue('Z'))
+						
+							// Add value to command Z
+							gcode.setValue('Z', to_string(stod(gcode.getValue('Z')) + storedAdjustment));
+						
+						// Otherwise
+						else
+						
+							// Set command Z
+							gcode.setValue('Z', to_string(positionRelativeZ + storedAdjustment));
+					}
+					
+					// Check if command has an E value
+					if(gcode.hasValue('E'))
+					
+						// Add value to command E value
+						gcode.setValue('E', to_string(stod(gcode.getValue('E')) + compensationE));
+					
+					// Store relative E
+					storedE = positionRelativeE;
+				}
+			}
+			
+      			// Otherwise check if command is G90
+			else if(gcode.hasValue('G') && gcode.getValue('G') == "90")
+				
+				// Clear relative mode
+				relativeMode = false;
+			
+			// Otherwise check if command is G91
+			else if(gcode.hasValue('G') && gcode.getValue('G') == "91")
+				
+				// Set relative mode
+				relativeMode = true;
+			
+			// Otherwise check if command is G92
+			else if(gcode.hasValue('G') && gcode.getValue('G') == "92") {
+			
+				// Check if command doesn't have an X, Y, Z, and E value
+				if(!gcode.hasValue('X') && !gcode.hasValue('Y') && !gcode.hasValue('Z') && !gcode.hasValue('E')) {
+			
+					// Set command values to zero
+					gcode.setValue('X', "0");
+					gcode.setValue('Y', "0");
+					gcode.setValue('Z', "0");
+					gcode.setValue('E', "0");
+				}
+			
+				// Otherwise
+				else {
+			
+					// Set relative positions
+					positionRelativeX = !gcode.hasValue('X') ? positionRelativeX : stod(gcode.getValue('X'));
+					positionRelativeY = !gcode.hasValue('Y') ? positionRelativeY : stod(gcode.getValue('Y'));
+					positionRelativeZ = !gcode.hasValue('Z') ? positionRelativeZ : stod(gcode.getValue('Z'));
+					positionRelativeE = !gcode.hasValue('E') ? positionRelativeE : stod(gcode.getValue('E'));
+				}
+			}
 				
 			// Send line to temp
 			temp << gcode << endl;
@@ -1046,9 +1428,15 @@ bool backlashCompensationPreprocessor() {
 
 	// Initialzie variables
 	string line;
-	Gcode gcode;
+	Gcode gcode, extraGcode;
 	fstream processedFile(folderLocation + "/output.gcode", ios::in | ios::binary);
 	fstream temp(folderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
+	bool relativeMode = true;
+	string valueF = "2000";
+	direction directionX, directionY, previousDirectionX = NEITHER, previousDirectionY = NEITHER;
+	double compensationX = 0, compensationY = 0;
+	double positionRelativeX = 0, positionRelativeY = 0, positionRelativeZ = 0, positionRelativeE = 0;
+	double deltaX, deltaY, deltaZ, deltaE;
 	
 	// Check if temp file was opened successfully
 	if(processedFile.good() && temp.good()) {
@@ -1059,8 +1447,120 @@ bool backlashCompensationPreprocessor() {
 			// Read in line
 			getline(processedFile, line);
 			
-			// Check if line was parsed successfully
-			gcode.parseLine(line);
+			// Check if line was parsed successfully, it's G0 or G1, and it isn't in relative mode
+			if(gcode.parseLine(line) && gcode.hasValue('G') && (gcode.getValue('G') == "0" || gcode.getValue('G') == "1") && !relativeMode) {
+			
+				// Check if command has an F value
+				if(gcode.hasValue('F'))
+			
+					// Set value F
+					valueF = gcode.getValue('F');
+				
+				// Set delta values
+				deltaX = !gcode.hasValue('X') ? 0 : stod(gcode.getValue('X')) - positionRelativeX;
+				deltaY = !gcode.hasValue('Y') ? 0 : stod(gcode.getValue('Y')) - positionRelativeY;
+				deltaZ = !gcode.hasValue('Z') ? 0 : stod(gcode.getValue('Z')) - positionRelativeZ;
+				deltaE = !gcode.hasValue('E') ? 0 : stod(gcode.getValue('E')) - positionRelativeE;
+				
+				// Set directions
+				directionX = deltaX > DBL_EPSILON ? POSITIVE : deltaX < -DBL_EPSILON ? NEGATIVE : previousDirectionX;
+				directionY = deltaY > DBL_EPSILON ? POSITIVE : deltaY < -DBL_EPSILON ? NEGATIVE : previousDirectionY;
+				
+				// Check if direction has changed
+				if((directionX != previousDirectionX && previousDirectionX != NEITHER) || (directionY != previousDirectionY && previousDirectionY != NEITHER)) {
+				
+					// Set extra g-code G value
+					extraGcode.clear();
+					extraGcode.setValue('G', gcode.getValue('G'));
+					
+					// Check if X direction has changed
+					if(directionX != previousDirectionX && previousDirectionX != NEITHER) {
+					
+						// Set X compensation
+						compensationX += printer.getBacklashX() * (directionX == POSITIVE ? 1 : -1);
+						
+						// Set extra g-code X value
+						extraGcode.setValue('X', to_string(positionRelativeX + compensationX));
+					}
+					
+					// Check if Y direction has changed
+					if(directionY != previousDirectionY && previousDirectionY != NEITHER) {
+					
+						// Set Y compensation
+						compensationY += printer.getBacklashY() * (directionY == POSITIVE ? 1 : -1);
+						
+						// Set extra g-code Y value
+						extraGcode.setValue('Y', to_string(positionRelativeY + compensationY));
+					}
+					
+					// Set extra g-code F value
+					extraGcode.setValue('F', "2900");
+					
+					// Send extra g-code to temp
+					temp << extraGcode << endl;
+					
+					// Set command's F value
+					gcode.setValue('F', valueF);
+				}
+			
+				// Check if command has an X value
+				if(gcode.hasValue('X'))
+			
+					// Add to command's X value
+					gcode.setValue('X', to_string(stod(gcode.getValue('X')) + compensationX));
+			
+				// Check if command has a Y value
+				if(gcode.hasValue('Y'))
+			
+					// Add to command's Y value
+					gcode.setValue('Y', to_string(stod(gcode.getValue('Y')) + compensationY));
+			
+				// Set relative values
+				positionRelativeX += deltaX;
+				positionRelativeY += deltaY;
+				positionRelativeZ += deltaZ;
+				positionRelativeE += deltaE;
+				
+				// Store directions
+				previousDirectionX = directionX;
+				previousDirectionY = directionY;
+			}
+			
+      			// Otherwise check if command is G90
+			else if(gcode.hasValue('G') && gcode.getValue('G') == "90")
+				
+				// Clear relative mode
+				relativeMode = false;
+			
+			// Otherwise check if command is G91
+			else if(gcode.hasValue('G') && gcode.getValue('G') == "91")
+				
+				// Set relative mode
+				relativeMode = true;
+			
+			// Otherwise check if command is G92
+			else if(gcode.hasValue('G') && gcode.getValue('G') == "92") {
+			
+				// Check if command doesn't have an X, Y, Z, and E value
+				if(!gcode.hasValue('X') && !gcode.hasValue('Y') && !gcode.hasValue('Z') && !gcode.hasValue('E')) {
+			
+					// Set command values to zero
+					gcode.setValue('X', "0");
+					gcode.setValue('Y', "0");
+					gcode.setValue('Z', "0");
+					gcode.setValue('E', "0");
+				}
+			
+				// Otherwise
+				else {
+			
+					// Set relative positions
+					positionRelativeX = !gcode.hasValue('X') ? positionRelativeX : stod(gcode.getValue('X'));
+					positionRelativeY = !gcode.hasValue('Y') ? positionRelativeY : stod(gcode.getValue('Y'));
+					positionRelativeZ = !gcode.hasValue('Z') ? positionRelativeZ : stod(gcode.getValue('Z'));
+					positionRelativeE = !gcode.hasValue('E') ? positionRelativeE : stod(gcode.getValue('E'));
+				}
+			}
 				
 			// Send line to temp
 			temp << gcode << endl;
@@ -1092,7 +1592,6 @@ bool feedRateConversionPreprocessor() {
 	Gcode gcode;
 	fstream processedFile(folderLocation + "/output.gcode", ios::in | ios::binary);
 	fstream temp(folderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
-	const double maxFeedRatePerSecond = 60.0001;
 	double commandFeedRate;
 	
 	// Check if temp file was opened successfully
@@ -1111,11 +1610,11 @@ bool feedRateConversionPreprocessor() {
 				commandFeedRate = stod(gcode.getValue('F')) / 60;
 				
 				// Force feed rate to adhere to limitations
-				if(commandFeedRate > maxFeedRatePerSecond)
-                			commandFeedRate = maxFeedRatePerSecond;
+				if(commandFeedRate > MAX_FEED_RATE)
+                			commandFeedRate = MAX_FEED_RATE;
                 		
                 		// Calculate adjusted feed rate
-                		commandFeedRate = 30 + (1 - commandFeedRate / maxFeedRatePerSecond) * 800;
+                		commandFeedRate = 30 + (1 - commandFeedRate / MAX_FEED_RATE) * 800;
                 		
 				// Set new feed rate for the command
 				gcode.setValue('F', to_string(commandFeedRate));

@@ -60,6 +60,9 @@ bool Gcode::parseLine(const char *line) {
 	// Clear empty
 	empty = false;
 	
+	// Clear host command
+	hostCommand.clear();
+	
 	// Skip leading whitespace
 	for(commandStart = const_cast<char *>(line); strlen(commandStart) && (*commandStart == ' ' || *commandStart == '\t' || *commandStart == '\r' || *commandStart == '\n'); commandStart++);
 	
@@ -934,6 +937,12 @@ string Gcode::getValue(char identifier) const {
 
 void Gcode::setValue(char identifier, const string &value) {
 
+	// Clear empty
+	empty = false;
+	
+	// Set parsed
+	parsed = true;
+
 	// Check what parameter is set
 	switch(identifier) {
 		
@@ -1088,11 +1097,39 @@ string Gcode::getString() const {
 
 void Gcode::setString(const string &value) {
 
+	// Clear empty
+	empty = false;
+	
+	// Set parsed
+	parsed = true;
+
 	// Set data type
 	dataType |= (1 << 15);
 
 	// Set string value
 	parameterValue[15] = value;
+}
+
+void Gcode::clear() {
+
+	// Set parameter value size
+	parameterValue.clear();
+	parameterValue.resize(16);
+	
+	// Set inital data type
+	dataType = 0x1080;
+	
+	// Clear parsed
+	parsed = false;
+	
+	// Set empty
+	empty = true;
+	
+	// Clear host command
+	hostCommand.clear();
+	
+	// Clear original command
+	originalCommand.clear();
 }
 
 bool Gcode::isParsed() const {

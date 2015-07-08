@@ -86,7 +86,19 @@ class Printer {
 		Name: Calibrate Z
 		Purpose: Calibraters the printer's Z
 		*/
-		bool calibrateZ();
+		void calibrateZ();
+		
+		/*
+		Name: Is Bed Orientation Valid
+		Purpose: Checks if the printer's bed orientation is valid
+		*/
+		bool isBedOrientationValid();
+		
+		/*
+		Name: Calibrate orientation
+		Purpose: Calibraters the printer's bed orientation
+		*/
+		void calibrateBedOrientation();
 		
 		/*
 		Name: Collect information
@@ -136,6 +148,7 @@ class Printer {
 		bool sendRequestAscii(char data);
 		bool sendRequestAscii(const char *data);
 		bool sendRequestBinary(const char *data);
+		bool sendRequestPreprocessedBinary(const string &data);
 		
 		// Receive data from the printer
 		string receiveResponseAscii();
@@ -199,6 +212,9 @@ class Printer {
 		
 		// Valid Z
 		bool validZ;
+		
+		// Valid bed orientation
+		bool validBedOrientation;
 		
 		// Valid firmware
 		bool validFirmware;

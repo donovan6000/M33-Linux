@@ -162,7 +162,7 @@ int main(int argc, char *argv[]) {
 	if(!printer.isFirmwareValid()) {
 	
 		// Display error
-		cout << "Printer firmware is corrupt" << endl;
+		cout << "Printer's firmware is corrupt" << endl;
 		
 		// Check if a firmware rom is provided
 		if(!firmwareRom.empty()) {
@@ -196,6 +196,16 @@ int main(int argc, char *argv[]) {
 	
 		// Calibrate Z
 		printer.calibrateZ();
+	}
+	
+	// Check if printer bed orientation isn't valid
+	if(!printer.isBedOrientationValid()) {
+	
+		// Display error
+		cout << "Printer's bed orientation is invalid" << endl << "Calibrating bed orientation" << endl;
+	
+		// Calibrate bed orientation
+		printer.calibrateBedOrientation();
 	}
 	
 	// Check if a file was provided
@@ -237,13 +247,13 @@ int main(int argc, char *argv[]) {
 				// Get valid response
 				do {
 					response = printer.receiveResponse();
-					if(line.substr(0, 2) == "G0" && response == "Info:Too small")
+					while(response == "Info:Too small" || response.substr(0, 2) == "T:")
 						response = printer.receiveResponse();
 				} while(response.empty());
 				
 				// Display response
 				cout << "Receive: " << response << endl << endl;
-			} while(response.substr(0, 2) != "ok" && response.substr(0, 2) != "T:");
+			} while(response.substr(0, 2) != "ok");
 		}
 	}
 	

@@ -483,7 +483,7 @@ bool Printer::isZValid() {
 	return validZ;
 }
 		
-bool Printer::calibrateZ() {
+void Printer::calibrateZ() {
 
 	// Initialize variables
 	string response;
@@ -493,6 +493,8 @@ bool Printer::calibrateZ() {
 		sendRequest("M104 S0");
 		do {
 			response = receiveResponse();
+			while(response.substr(0, 2) == "T:")
+				response = receiveResponse();
 		} while(response.empty());
 	} while(response.substr(0, 2) != "ok");
 	
@@ -533,6 +535,8 @@ bool Printer::calibrateZ() {
 		sendRequest("M104 S0");
 		do {
 			response = receiveResponse();
+			while(response.substr(0, 2) == "T:")
+				response = receiveResponse();
 		} while(response.empty());
 	} while(response.substr(0, 2) != "ok");
 	
@@ -562,9 +566,18 @@ bool Printer::calibrateZ() {
 	
 	// Set valid Z
 	validZ = true;
+}
+
+bool Printer::isBedOrientationValid() {
+
+	// Retrurn valid bed orientation
+	return validBedOrientation;
+}
+
+void Printer::calibrateBedOrientation() {
 	
-	// Return true
-	return true;
+	// Set valid bed orientation
+	validBedOrientation = true;
 }
 		
 bool Printer::collectInformation() {
@@ -627,11 +640,12 @@ bool Printer::collectInformation() {
 		sendRequestBinary("M573");
 		response = receiveResponse();
 	
-		// Set bed orientation
+		// Set bed orientation and valid bed orientation
 		backRightOrientation = stod(response.substr(response.find("BR:") + 3, response.find(" ", response.find("BR:")) - response.find("BR:") - 3));
 		backLeftOrientation = stod(response.substr(response.find("BL:") + 3, response.find(" ", response.find("BL:")) - response.find("BL:") - 3));
 		frontLeftOrientation = stod(response.substr(response.find("FL:") + 3, response.find(" ", response.find("FL:")) - response.find("FL:") - 3));
 		frontRightOrientation = stod(response.substr(response.find("FR:") + 3));
+		validBedOrientation = (backRightOrientation != 0 || backLeftOrientation != 0 || frontLeftOrientation != 0 || frontRightOrientation != 0) && backRightOrientation >= -3 && backRightOrientation <= 3 && backLeftOrientation >= -3 && backLeftOrientation <= 3 && frontLeftOrientation >= -3 && frontLeftOrientation <= 3 && frontRightOrientation >= -3 && frontRightOrientation <= 3;
 	
 		// Get status
 		sendRequestBinary("M117");
@@ -798,7 +812,7 @@ bool Printer::printFile(const char *file) {
 			// Get valid response
 			do {
 				response = receiveResponse();
-				if(line.substr(0, 2) == "G0" && response == "Info:Too small")
+				while(response == "Info:Too small" || response.substr(0, 2) == "T:")
 					response = receiveResponse();
 			} while(response.empty());
 			
@@ -960,8 +974,8 @@ string Printer::receiveResponseBinary() {
 	// Get response
 	while(character != '\n') {
 		response.push_back(character);
-		usleep(50);
-		while(read(fd, &character, 1) == -1);
+		while(read(fd, &character, 1) == -1)
+			usleep(50);
 	}
 	
 	// Return response

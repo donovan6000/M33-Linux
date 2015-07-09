@@ -1477,7 +1477,7 @@ Gcode Printer::createTackPoint(const Gcode &point, const Gcode &refrence) {
 	return gcode;
 }
 
-bool Printer::isSharpCornerForThermalBonding(const Gcode &point, const Gcode &refrence) {
+bool Printer::isSharpCorner(const Gcode &point, const Gcode &refrence) {
 
 	// Initialize variables
 	double currentX = point.hasValue('X') ? stod(point.getValue('X')) : 0;
@@ -1487,21 +1487,6 @@ bool Printer::isSharpCornerForThermalBonding(const Gcode &point, const Gcode &re
 	
 	// Calculate value
 	double value = acos((currentX * previousX + currentY * previousY) / (pow(currentX * currentX + currentY * currentY, 2) * pow(previousX * previousX + previousY * previousY, 2)));
-	
-	// Return if sharp corner
-	return value > 0 && value < M_PI_2;
-}
-
-bool Printer::isSharpCornerForWaveBonding(const Gcode &point, const Gcode &refrence) {
-
-	// Initialize variables
-	double currentX = point.hasValue('X') ? stod(point.getValue('X')) : 0;
-	double currentY = point.hasValue('Y') ? stod(point.getValue('Y')) : 0;
-	double previousX = refrence.hasValue('X') ? stod(refrence.getValue('X')) : 0;
-	double previousY = refrence.hasValue('Y') ? stod(refrence.getValue('Y')) : 0;
-	
-	// Calculate value
-	double value = acos((currentX * previousX + currentY + previousY) / (pow(currentX * currentX + currentY + currentY, 2) * pow(previousX * previousX + previousY + previousY, 2)));
 	
 	// Return if sharp corner
 	return value > 0 && value < M_PI_2;
@@ -1771,7 +1756,7 @@ bool Printer::waveBondingPreprocessor() {
 					if(!previousGcode.isEmpty()) {
 					
 						// Check if corner count is at most one and sharp corner
-						if(cornerCounter <= 1 && isSharpCornerForWaveBonding(gcode, previousGcode)) {
+						if(cornerCounter <= 1 && isSharpCorner(gcode, previousGcode)) {
 						
 							// Check if refrence g-codes is set
 							if(refrenceGcode.isEmpty()) {
@@ -1792,7 +1777,7 @@ bool Printer::waveBondingPreprocessor() {
 						}
 						
 						// Otherwise check is corner count is at least one and sharp corner
-						else if(cornerCounter >= 1 && isSharpCornerForWaveBonding(gcode, refrenceGcode)) {
+						else if(cornerCounter >= 1 && isSharpCorner(gcode, refrenceGcode)) {
 						
 							// Check if a tack point was created
 							tackPoint = createTackPoint(gcode, refrenceGcode);
@@ -2015,7 +2000,7 @@ bool Printer::thermalBondingPreprocessor() {
 							if(cornerCounter <= 1 && layerCounter <= 1) {
 							
 								// Check if sharp corner
-								if(isSharpCornerForThermalBonding(gcode, previousGcode)) {
+								if(isSharpCorner(gcode, previousGcode)) {
 								
 									// Check if refrence g-codes is set
 									if(refrenceGcode.isEmpty()) {
@@ -2038,7 +2023,7 @@ bool Printer::thermalBondingPreprocessor() {
 							}
 							
 							// Otherwise check if corner counter is greater than one but layer counter isn't and sharp corner
-							else if(cornerCounter >= 1 && layerCounter <= 1 && isSharpCornerForThermalBonding(gcode, refrenceGcode)) {
+							else if(cornerCounter >= 1 && layerCounter <= 1 && isSharpCorner(gcode, refrenceGcode)) {
 							
 								// Check if a tack point was created
 								tackPoint = createTackPoint(gcode, refrenceGcode);

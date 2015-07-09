@@ -178,8 +178,7 @@ class Printer {
 		Gcode createTackPoint(const Gcode &point, const Gcode &refrence);
 		
 		// Is sharp corner
-		bool isSharpCornerForThermalBonding(const Gcode &point, const Gcode &refrence);
-		bool isSharpCornerForWaveBonding(const Gcode &point, const Gcode &refrence);
+		bool isSharpCorner(const Gcode &point, const Gcode &refrence);
 		
 		// Get current adjustment Z
 		double getCurrentAdjustmentZ();

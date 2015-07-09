@@ -1030,7 +1030,11 @@ void Printer::translatorMode() {
 		
 			// Set virtual serial port location
 			virtualSerialPortLocation = "/dev/ttyACM" + to_string(i);
+		
+		// Close the file
+		file.close();
 	}
+	
 	
 	// Check if creating a symbolic link between virtual port and serial port failed
 	if(symlink(ptsname(vd), virtualSerialPortLocation.c_str()) < 0) {

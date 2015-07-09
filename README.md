@@ -9,7 +9,7 @@ You can download an the latest executable <a href="https://www.exploitkings.com/
 <br>
 The parameters that can be provided when running this program are as follows:
 <br>
-m3d-linux -v -p -w -t -b -l -f -r firmware.rom -g input.gcode -s -o output.gcode
+m3d-linux -v -p -w -t -b -l -f -r firmware.rom -i input.gcode -s -o output.gcode
 
 -v | --validation: Use validation pre-processor
 

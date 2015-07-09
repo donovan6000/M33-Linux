@@ -21,7 +21,7 @@ void breakHandler(int signal);
 int main(int argc, char *argv[]) {
 
 	// Initialize variables
-	string response, line, firmwareRom, gcodeFile;
+	string response, line, firmwareRom, inputFile, outputFile;
 	ifstream file;
 	bool translate = false;
 	
@@ -29,7 +29,7 @@ int main(int argc, char *argv[]) {
 	signal(SIGINT, breakHandler);
 	
 	// Display version
-	cout << "M3D Linux V0.9" << endl << endl;
+	cout << "M3D Linux V0.10" << endl << endl;
 	
 	// Check if not root
     	if(getuid()) {
@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
 		if(!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
 		
 			// Display help
-			cout << "Usage: m3d-linux -v -p -w -t -b -l -f -r firmware.rom -g file.gcode -s" << endl;
+			cout << "Usage: m3d-linux -v -p -w -t -b -l -f -r firmware.rom -g input.gcode -s -o output.gcode" << endl;
 			cout << "-v | --validation: Use validation pre-processor" << endl;
 			cout << "-p | --preparation: Use preparation pre-processor" << endl;
 			cout << "-w | --wavebonding: Use wave bonding pre-processor" << endl;
@@ -55,8 +55,9 @@ int main(int argc, char *argv[]) {
 			cout << "-l | --backlashcompensation: Use backlash compensation pre-processor" << endl;
 			cout << "-f | --feedrateconversion: Use feed rate conversion pre-processor" << endl;
 			cout << "-r | --firmwarerom: Use the following parameter as the firmware ROM in case firmware is corrupt" << endl;
-			cout << "-g | --gcodefile: Use the following parameter as the G-code file to processes and send to the printer. G-code commands can be manually entered if not G-code file is not provided." << endl;
-			cout << "-s | --translate: Uses program as a middle man to communicate between the printer and other software" << endl << endl;
+			cout << "-i | --inputfile: Use the following parameter as the G-code file to processes and send to the printer. G-code commands can be manually entered if not G-code file is not provided." << endl;
+			cout << "-s | --translate: Uses the program as a middle man to communicate between the printer and other software" << endl;
+			cout << "-o | --outputfile: Use the following parameter as the G-code file to output after the input file has been processed by all the desired pre-processor stages." << endl << endl;
 			return 0;
 		}
 	
@@ -120,25 +121,43 @@ int main(int argc, char *argv[]) {
 			}
 		}
 		
-		// Otherwise check if a g-code file is provided
-		else if(!strcmp(argv[i], "-g") || !strcmp(argv[i], "--gcodefile")) {
+		// Otherwise check if an input file is provided
+		else if(!strcmp(argv[i], "-i") || !strcmp(argv[i], "--inputfile")) {
 		
-			// Check if g-code file parameter exists
+			// Check if input file parameter exists
 			if(i < argc - 1)
 			
-				// Set g-code file
-				gcodeFile = argv[++i];
+				// Set input file
+				inputFile = argv[++i];
 			
 			// Otherwise
 			else {
 			
 				// Display error
-				cout << "No G-code file provided" << endl;
+				cout << "No input file provided" << endl;
 				return 0;
 			}
 		}
 		
-		// Otherwise check if using with octoprint
+		// Otherwise check if an output file is provided
+		else if(!strcmp(argv[i], "-o") || !strcmp(argv[i], "--outputfile")) {
+		
+			// Check if output file parameter exists
+			if(i < argc - 1)
+			
+				// Set output file
+				outputFile = argv[++i];
+			
+			// Otherwise
+			else {
+			
+				// Display error
+				cout << "No output file provided" << endl;
+				return 0;
+			}
+		}
+		
+		// Otherwise check if using with translate
 		else if(!strcmp(argv[i], "-s") || !strcmp(argv[i], "--translate"))
 		
 			// Set translate
@@ -172,8 +191,8 @@ int main(int argc, char *argv[]) {
 				return 0;
 			}
 			
-			// Check if current character isn't a digit
-			if(firmwareRom[i] < '0' || firmwareRom[i] > '9') {
+			// Check if current character isn't a digit or length is invalid
+			if(firmwareRom[i] < '0' || firmwareRom[i] > '9' || (i == firmwareRom.size() - 1 && i < 9)) {
 			
 				// Display error
 				cout << "Invalid firmware ROM name" << endl;
@@ -185,20 +204,28 @@ int main(int argc, char *argv[]) {
 		file.close();
 	}
 	
-	// Check if a g-code file is provided
-	if(!gcodeFile.empty()) {
+	// Check if an input file is provided
+	if(!inputFile.empty()) {
 	
-		// Check if g-code file doesn't exists
-		file.open(gcodeFile);
+		// Check if the input file doesn't exists
+		file.open(inputFile);
 		if(!file.good()) {
 		
 			// Display error
-			cout << "G-code file doesn't exist" << endl;
+			cout << "Input file doesn't exist" << endl;
 			return 0;
 		}
 		
 		// Close file
 		file.close();
+	}
+	
+	// Check if an output file is provided without an input file
+	if(!outputFile.empty() && inputFile.empty()) {
+	
+		// Display error
+		cout << "An output file cannot be generated without an input file" << endl;
+		return 0;
 	}
 	
 	// Wait for device to be connected
@@ -275,11 +302,17 @@ int main(int argc, char *argv[]) {
 		printer.calibrateBedOrientation();
 	}
 	
-	// Check if a file was provided
-	if(!gcodeFile.empty())
+	// Check if an output file was provided
+	if(!outputFile.empty())
+	
+		// Process file
+		printer.processFile(inputFile.c_str(), outputFile.c_str());
+	
+	// Otherwise check if an input file was provided
+	else if(!inputFile.empty())
 	
 		// Print file
-		printer.printFile(gcodeFile.c_str());
+		printer.printFile(inputFile.c_str());
 	
 	// Otherwise check if translating
 	else if(translate)

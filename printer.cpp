@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <termios.h>
+#include <pwd.h>
 #include "printer.h"
 
 
@@ -315,8 +316,8 @@ bool Printer::updateFirmware(const char *file) {
 					return false;
 				}
 				
-				// Check if current character isn't a digit
-				if(file[i] < '0' || file[i] > '9')
+				// Check if current character isn't a digit or length is invalid
+				if(file[i] < '0' || file[i] > '9' || (i == strlen(file) - 1 && i < 9))
 				
 					// Return false
 					return false;
@@ -754,21 +755,17 @@ string Printer::receiveResponse() {
 	return bootloaderMode ? receiveResponseAscii() : receiveResponseBinary();
 }
 
-bool Printer::printFile(const char *file) {
+bool Printer::processFile(const char *inputFile, const char *outputFile) {
 
 	// Initialize variables
 	fstream processedFile;
 	ifstream input;
-	string line, response;
-	Gcode gcode;
-	queue<string> buffer;
-	char character;
-	uint8_t commandsSent = 0;
-	uint16_t lineNumber = 0;
-	uint64_t totalLines = 0, lineCounter = 0;
-	
+	ofstream output;
+	char userName[256];
+	passwd *pwd;
+
 	// Check if opening input and creating processed file wern't successful
-	input.open(file, ios::in | ios::binary);
+	input.open(inputFile, ios::in | ios::binary);
 	processedFile.open(workingFolderLocation + "/output.gcode", ios::out | ios::binary | ios::app);
 	if(!input.good() || !processedFile.good())
 	
@@ -780,54 +777,217 @@ bool Printer::printFile(const char *file) {
 	processedFile.close();
 	
 	// Display message
-	cout << "Processing " << file << endl;
-
-	// Check if print dimensions arte out of bounds
-	if(!getPrintInformation())
+	cout << "Processing " << inputFile << endl;
 	
-		// Return false
+	// Check if print dimensions are out of bounds
+	if(!getPrintInformation()) {
+	
+		// Display error
+		cout << "Model's dimensions are invalid" << endl;
 		return false;
+	}
 	
 	// Use validation preprocessor if set
 	if(useValidation) {
-		cout << "Using validation pre-processor" << endl;
-		validationPreprocessor();
+		
+		// Check if preprocessor failed
+		if(!validationPreprocessor()) {
+		
+			// Display error
+			cout << "Validation pre-processor failed" << endl;
+			return 0;
+		}
+		
+		// Otherwise
+		else
+		
+			// Display message
+			cout << "Validation pre-processor done" << endl;
 	}
 	
 	// Use preparation preprocessor if set
 	if(usePreparation) {
-		cout << "Using preparation pre-processor" << endl;
-		preparationPreprocessor();
+		
+		// Check if preprocessor failed
+		if(!preparationPreprocessor()) {
+		
+			// Display error
+			cout << "Preparation pre-processor failed" << endl;
+			return 0;
+		}
+		
+		// Otherwise
+		else
+		
+			// Display message
+			cout << "Preparation pre-processor done" << endl;
 	}
 	
 	// Use wave bonding preprocessor if set
 	if(useWaveBonding) {
-		cout << "Using wave bonding pre-processor" << endl;
-		waveBondingPreprocessor();
+		
+		// Check if preprocessor failed
+		if(!waveBondingPreprocessor()) {
+		
+			// Display error
+			cout << "Wave bonding pre-processor failed" << endl;
+			return 0;
+		}
+		
+		// Otherwise
+		else
+		
+			// Display message
+			cout << "Wave bonding pre-processor done" << endl;
 	}
 	
 	// Use thermal bonding preprocessor if set
 	if(useThermalBonding) {
-		cout << "Using thermal bonding pre-processor" << endl;
-		thermalBondingPreprocessor();
+		
+		// Check if preprocessor failed
+		if(!thermalBondingPreprocessor()) {
+		
+			// Display error
+			cout << "Thermal bonding pre-processor failed" << endl;
+			return 0;
+		}
+		
+		// Otherwise
+		else
+		
+			// Display message
+			cout << "Thermal bonding pre-processor done" << endl;
 	}
 	
 	// Use bed compensation preprocessor if set
 	if(useBedCompensation) {
-		cout << "Using bed compensation pre-processor" << endl;
-		bedCompensationPreprocessor();
+		
+		// Check if preprocessor failed
+		if(!bedCompensationPreprocessor()) {
+		
+			// Display error
+			cout << "Bed compensation pre-processor failed" << endl;
+			return 0;
+		}
+		
+		// Otherwise
+		else
+		
+			// Display message
+			cout << "Bed compensation pre-processor done" << endl;
 	}
 	
 	// Use backlash compensation preprocessor if set
 	if(useBacklashCompensation) {
-		cout << "Using backlash compensation pre-processor" << endl;
-		backlashCompensationPreprocessor();
+		
+		// Check if preprocessor failed
+		if(!backlashCompensationPreprocessor()) {
+		
+			// Display error
+			cout << "Backlash compensation pre-processor failed" << endl;
+			return 0;
+		}
+		
+		// Otherwise
+		else
+		
+			// Display message
+			cout << "Backlash compensation pre-processor done" << endl;
 	}
 	
 	// Use feed rate conversion proprocessor if set
 	if(useFeedRateConversion) {
-		cout << "Using feed rate conversion pre-processor" << endl;
-		feedRateConversionPreprocessor();
+		
+		// Check if preprocessor failed
+		if(!feedRateConversionPreprocessor()) {
+		
+			// Display error
+			cout << "Feed rate conversion pre-processor failed" << endl;
+			return 0;
+		}
+		
+		// Otherwise
+		else
+		
+			// Display message
+			cout << "Feed rate conversion pre-processor done" << endl;
+	}
+	
+	// Check if an output file is specified
+	if(outputFile != NULL) {
+	
+		// Check if getting user name was successful
+		if(getlogin_r(userName, 256))
+		
+			// Return false
+			return false;
+		
+		// Check if getting group or user id failed
+		if((pwd = getpwnam(userName)) == NULL)
+		
+			// Return false
+			return false;
+	
+		// Check if opening files failed
+		processedFile.open(workingFolderLocation + "/output.gcode", ios::in | ios::binary);
+		output.open(outputFile, ios::out | ios::binary);
+		if(!output.good() || !processedFile.good())
+	
+			// Return false
+			return false;
+	
+		// Copy processed file to output
+		output << processedFile.rdbuf();
+		
+		// Close files
+		output.close();
+		processedFile.close();
+		
+		// Check if changing permission of output failed
+		if(chmod(outputFile, S_IRUSR | S_IRGRP | S_IROTH | S_IWUSR) < 0) {
+		
+			// Delete output file
+			unlink(outputFile);
+			return false;
+		}
+		
+		// Check if changing ownership of output failed
+		if(chown(outputFile, pwd->pw_uid, pwd->pw_gid) < 0) {
+		
+			// Delete output file
+			unlink(outputFile);
+			return false;
+		}
+		
+		// Delete processed file
+		unlink((workingFolderLocation + "/output.gcode").c_str());
+		
+		// Display message
+		cout << outputFile << " was successfully created" << endl;
+	}
+	
+	// Return true
+	return true;
+}
+
+bool Printer::printFile(const char *file) {
+
+	// Initialize variables
+	fstream processedFile;
+	string line, response;
+	Gcode gcode;
+	queue<string> buffer;
+	char character;
+	uint8_t commandsSent = 0;
+	uint16_t lineNumber = 0;
+	uint64_t totalLines = 0, lineCounter = 0;
+	
+	// Check if processing file failed
+	if(!processFile(file)) {
+	
+		// Display error
+		cout << "Processing file failed" << endl;
+		return false;
 	}
 	
 	// Go through the fully processed file
@@ -1021,7 +1181,7 @@ void Printer::translatorMode() {
 		return;
 	}
 	
-	// Go through all device names
+	// Go through all serial device names
 	for(uint8_t i = 0; virtualSerialPortLocation.empty(); i++) {
 	
 		// Check if device name doesn't already exists
@@ -1045,7 +1205,7 @@ void Printer::translatorMode() {
 	}
 	
 	// Check if changing permission of virtual port failed
-	if(chmod(virtualSerialPortLocation.c_str(), 0666) < 0) {
+	if(chmod(virtualSerialPortLocation.c_str(), S_IRUSR | S_IRGRP | S_IROTH | S_IWUSR | S_IWGRP | S_IWOTH) < 0) {
 	
 		// Close file and return
 		close(vd);

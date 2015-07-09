@@ -127,6 +127,12 @@ class Printer {
 		string receiveResponse();
 		
 		/*
+		Name: Process File
+		Purpose: Processes a g-code file with the set pre-processor parameters
+		*/
+		bool processFile(const char *inputFile, const char *outputFile = NULL);
+		
+		/*
 		Name: Print File
 		Purpose: Pre-processed and send a file to the printer
 		*/

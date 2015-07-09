@@ -3,6 +3,10 @@ Copyright (c) 2015 donovan6000
 
 Changelog:
 
+V0.10 July 9, 2015
+
+	* Added ability to process an input file with the desired pre-processor stages then outputting it to a file
+
 V0.9 July 9, 2015
 
 	* Creates a symbolic link for the virtual serial port now to allow other software to more easily recognize that it is a serial port

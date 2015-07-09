@@ -3,10 +3,6 @@ Copyright (c) 2015 donovan6000
 
 Changelog:
 
-V0.9 July 9, 2015
-
-	* Creates a symbolic link for the virtual serial port now to allow other software to more easily recognize that it is a serial port
-
 V0.8 July 9, 2015
 
 	* Add initial code for setting backlash speed. Wont be used until I figure out which address in EEPROM stores the value.

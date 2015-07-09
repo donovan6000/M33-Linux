@@ -29,7 +29,7 @@ int main(int argc, char *argv[]) {
 	signal(SIGINT, breakHandler);
 	
 	// Display version
-	cout << "M3D Linux V0.8" << endl << endl;
+	cout << "M3D Linux V0.9" << endl << endl;
 	
 	// Check if not root
     	if(getuid()) {

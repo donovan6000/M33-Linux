@@ -113,7 +113,7 @@ class Printer {
 		bool sendRequest(const char *data);
 		bool sendRequest(const string &data);
 		bool sendRequest(const Gcode &data);
-	
+		
 		/*
 		Name: Receive Response
 		Purpose: Receives data to the printer
@@ -137,6 +137,12 @@ class Printer {
 		void setBedCompensationPreprocessor();
 		void setBacklashCompensationPreprocessor();
 		void setFeedRateConversionPreprocessor();
+		
+		/*
+		Name: Translator Mode
+		Purpose: Acts as a translator for other software to communicate with the printer
+		*/
+		void translatorMode();
 	
 	// Private
 	private:
@@ -243,6 +249,7 @@ class Printer {
 		// Backlash settings
 		double backlashX;
 		double backlashY;
+		uint16_t backlashSpeed;
 		
 		// Bed orientations
 		double backRightOrientation;

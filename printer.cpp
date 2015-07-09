@@ -646,6 +646,8 @@ bool Printer::collectInformation() {
 		// Set backlash values
 		backlashX = stod(response.substr(response.find("BX:") + 3, response.find(" ", response.find("BX:")) - response.find("BX:") - 3));
 		backlashY = stod(response.substr(response.find("BY:") + 3));
+		
+		backlashSpeed = 2900;
 	
 		// Get bed orientation
 		sendRequestBinary("M573");
@@ -947,6 +949,106 @@ void Printer::setFeedRateConversionPreprocessor() {
 
 	// Set use feed rate conversion
 	useFeedRateConversion = true;
+}
+
+void Printer::translatorMode() {
+
+	// Initialize variables
+	char character;
+	string buffer;
+	int vd = posix_openpt(O_RDWR | O_NONBLOCK);
+	
+	// Check if creating virtual serial port failed
+	if(vd < 0)
+	
+		// Return
+		return;
+	
+	// Check if changing ownership failed
+	if(grantpt(vd) < 0) {
+	
+		// Close file and return
+		close(vd);
+		return;
+	}
+	
+	// Check if unlocking failed
+	if(unlockpt(vd) < 0) {
+	
+		// Close file and return
+		close(vd);
+		return;
+	}
+	
+	// Check if failed to get location
+	if(ptsname(vd) == NULL) {
+	
+		// Close file and return
+		close(vd);
+		return ;
+	}
+	
+	// Display message
+	cout << "Translation port established at " << ptsname(vd) << endl;
+	
+	// Loop forever
+	while(1) {
+	
+		// Check if data is being sent to the printer
+		if(read(vd, &character, 1) == 1) {
+		
+			// Get request
+			buffer.clear();
+			do {
+				buffer.push_back(character);
+			} while(read(vd, &character, 1) == 1);
+			
+			// Check if request is unknown
+			if(buffer == "M110\n" || buffer == "M21\n") {
+			
+				// Send expected response from the printer
+				tcflush(vd, TCIOFLUSH);
+				if(write(vd, "ok\n", 3) != 3)
+					return;
+				tcdrain(vd);
+			}
+			
+			// Otherwise
+			else {
+			
+				// Check if request contains a checksum
+				if(buffer.find('*') != string::npos)
+				
+					// Remove checksum
+					buffer = buffer.substr(0, buffer.find('*'));
+				
+				// Send request to the printer
+				sendRequest(buffer);
+			}
+		}
+		
+		// Check if data is being sent from the printer
+		if(read(fd, &character, 1) == 1) {
+		
+			// Get response
+			buffer.clear();
+			do {
+				buffer.push_back(character);
+			} while(read(fd, &character, 1) == 1);
+			
+			// Send response from printer
+			tcflush(vd, TCIOFLUSH);
+			if(write(vd, buffer.c_str(), buffer.size()) != static_cast<unsigned int>(buffer.size()))
+				return;
+			tcdrain(vd);
+		}
+		
+		// Wait
+		usleep(200);
+	}
+	
+	// Close virtual port
+	close(vd);
 }
 
 bool Printer::sendRequestAscii(char data) {
@@ -2389,7 +2491,7 @@ bool Printer::backlashCompensationPreprocessor() {
 					}
 					
 					// Set extra g-code F value
-					extraGcode.setValue('F', "2900");
+					extraGcode.setValue('F', to_string(backlashSpeed));
 					
 					// Send extra g-code to temp
 					temp << extraGcode << endl;

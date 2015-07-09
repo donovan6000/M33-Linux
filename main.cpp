@@ -14,9 +14,10 @@ int main(int argc, char *argv[]) {
 	Printer printer;
 	string response, line, firmwareRom, gcodeFile;
 	ifstream file;
+	bool translate = false;
 	
 	// Display version
-	cout << "M3D Linux V0.7" << endl << endl;
+	cout << "M3D Linux V0.8" << endl << endl;
 	
 	// Go through all commands
 	for(uint8_t i = 0; i < argc; i++) {
@@ -25,7 +26,7 @@ int main(int argc, char *argv[]) {
 		if(!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
 		
 			// Display help
-			cout << "Usage: m3d-linux -v -p -w -t -b -l -f -r firmware.rom -g file.gcode" << endl;
+			cout << "Usage: m3d-linux -v -p -w -t -b -l -f -r firmware.rom -g file.gcode -s" << endl;
 			cout << "-v | --validation: Use validation pre-processor" << endl;
 			cout << "-p | --preparation: Use preparation pre-processor" << endl;
 			cout << "-w | --wavebonding: Use wave bonding pre-processor" << endl;
@@ -34,7 +35,8 @@ int main(int argc, char *argv[]) {
 			cout << "-l | --backlashcompensation: Use backlash compensation pre-processor" << endl;
 			cout << "-f | --feedrateconversion: Use feed rate conversion pre-processor" << endl;
 			cout << "-r | --firmwarerom: Use the following parameter as the firmware ROM in case firmware is corrupt" << endl;
-			cout << "-g | --gcodefile: Use the following parameter as the G-code file to processes and send to the printer. G-code commands can be manually entered if not G-code file is not provided." << endl << endl;
+			cout << "-g | --gcodefile: Use the following parameter as the G-code file to processes and send to the printer. G-code commands can be manually entered if not G-code file is not provided." << endl;
+			cout << "-s | --translate: Uses program as a middle man to communicate between the printer and other software" << endl << endl;
 			return 0;
 		}
 	
@@ -115,6 +117,12 @@ int main(int argc, char *argv[]) {
 				return 0;
 			}
 		}
+		
+		// Otherwise check if using with octoprint
+		else if(!strcmp(argv[i], "-s") || !strcmp(argv[i], "--translate"))
+		
+			// Set translate
+			translate = true;
 	}
 	
 	// Check if a firmware rom is provided
@@ -212,7 +220,13 @@ int main(int argc, char *argv[]) {
 	if(!gcodeFile.empty())
 	
 		// Print file
-		printer.printFile(gcodeFile.c_str()) ;
+		printer.printFile(gcodeFile.c_str());
+	
+	// Otherwise check if translating
+	else if(translate)
+	
+		// Enter translator mode
+		printer.translatorMode();
 	
 	// Otherwise
 	else {

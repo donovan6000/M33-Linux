@@ -33,9 +33,9 @@ using namespace std;
 #define BED_HIGH_MIN_Z BED_MEDIUM_MAX_Z
 
 // Filament details
-enum filamentTypes {UNKNOWN, ABS, PLA, HIPS, OTHER};
+enum filamentTypes {NO_TYPE, ABS, PLA, HIPS, OTHER};
 
-enum filamentLocations {INTERNAL, EXTERNAL};
+enum filamentLocations {NO_LOCATION, INTERNAL, EXTERNAL};
 
 enum filamentColors {BLACK, BLUE, BROWN, GOLD, PINK, GREEN, LIGHT_BLUE, LIGHT_GREEN, MAGENTA, NATURAL, NEON_BLUE, NEON_ORANGE, NEON_YELLOW, ORANGE, PURPLE, RED, SILVER, WHITE, YELLOW = 0x13, OTHER_COLOR, PHANTOM_WHITE, HONEY_CLEAR, FUCHSIA_RED, CHRIMSON_RED, FIRE_ORANGE, MANGO_YELLOW, SHAMROCK_GREEN, COBALT_BLUE, CARRIBEAN_BLUE, MULBERRY_PURPLE = 0x1E, TITANIUM_SILVER, CHARCOAL_BLACK, WHITE_PEARL, CRYSTAL_CLEAR, LIGHT_FUCHSIA, DEEP_CRIMSON, DEEP_SHAMROCK, DEEP_COLBALT, LIGHT_CARRIBEAN = 0x27, DEEP_MULBERRY, SATELLITE_SILVER, DEEP_LEMON, SUNSET_ORANGE, ONYX_BLACK, DRANGON_RED_TOUCH, DRAGON_RED_HOT, ROSE_RED_TOUCH, CORAL_ORANGE_TOUCH, CORAL_ORANGE_WARM, DESPICABLE_YELLOW_TOUCH, MONSTER_GREEN_TOUCH = 0x33, GENIT_BLUE_TOUCH, GENIE_BLUE_ICE, GARGOYLE_BLACK_TOUCH, TRICHROME_NEBULA, TRICHROME_TIGER, FUTURE_ABS = 0x4000, FUTURE_FILAMENT = 0x8000};
 
@@ -63,6 +63,12 @@ class Printer {
 		Purpose: Connects or reconnects to the printer
 		*/
 		bool connect();
+		
+		/*
+		Name: Get Firnware Version
+		Purpose: Returns the printer's firmware version
+		*/
+		string getFirmwareVersion();
 		
 		/*
 		Name: Is Firmware Valid
@@ -261,6 +267,9 @@ class Printer {
 		
 		// File descriptor
 		int fd;
+		
+		// Virtual serial port location
+		string virtualSerialPortLocation;
 };
 
 

@@ -8,6 +8,7 @@
 #include <queue>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <termios.h>
 #include "printer.h"
 
@@ -43,7 +44,7 @@
 #define MAX_FEED_RATE 60.0001L
 
 // Fan types
-enum fanTypes {HENGLIXIN = 0x01, LISTENER = 0x02, SHENZHEW = 0x03, NONE= 0xFF};
+enum fanTypes {HENGLIXIN = 0x01, LISTENER = 0x02, SHENZHEW = 0x03, NO_FAN = 0xFF};
 
 // Directions
 enum directions {POSITIVE, NEGATIVE, NEITHER};
@@ -105,6 +106,10 @@ Printer::~Printer() {
 	
 	// Delete temporary folder
 	rmdir(workingFolderLocation.c_str());
+	
+	// Delete symbolic link for virtual serial location
+	if(!virtualSerialPortLocation.empty())
+		unlink(virtualSerialPortLocation.c_str());
 }
 
 bool Printer::connect() {
@@ -149,11 +154,17 @@ bool Printer::connect() {
 	return false;
 }
 
+string Printer::getFirmwareVersion() {
+
+	// Return firmware version
+	return firmwareVersion;
+}
+
 bool Printer::isFirmwareValid() {
 
 	// Initialize variables
 	string response, eepromSerial;
-	uint32_t chipCrc = 0, eepromCrc = 0;
+	uint32_t chipCrc = 0, eepromCrc = 0, eepromFirmware = 0;
 	fanTypes eepromFan;
 	uint8_t fanOffset;
 	float fanScale;
@@ -201,6 +212,13 @@ bool Printer::isFirmwareValid() {
 		
 				// Return false
 				return false;
+			
+			// Get eeprom firmware
+			for(int8_t i = 3; i >= 0; i--) {
+				eepromFirmware <<= 8;
+				eepromFirmware += static_cast<uint8_t>(response[i]);
+			}
+			firmwareVersion = to_string(eepromFirmware);
 		
 			// Get eeprom serial
 			for(uint8_t i = 0; i < 13; i++)
@@ -208,9 +226,9 @@ bool Printer::isFirmwareValid() {
 			
 			// Get eeprom fan
 			eepromFan = static_cast<fanTypes>(response[0x2AB]);
-		
+			
 			// Check if fan needs updating
-			if(!eepromFan || eepromFan == NONE) {
+			if(!eepromFan || eepromFan == NO_FAN) {
 		
 				// Set fan to default
 				eepromFan = HENGLIXIN;
@@ -639,7 +657,7 @@ bool Printer::collectInformation() {
 		frontLeftOffset = stod(response.substr(response.find("FLO:") + 4, response.find(" ", response.find("FLO:")) - response.find("FLO:") - 4));
 		bedHeightOffset = stod(response.substr(response.find("ZO:") + 3));
 
-		// Get backlash
+		// Get backlash X and Y
 		sendRequestBinary("M572");
 		response = receiveResponse();
 	
@@ -647,8 +665,22 @@ bool Printer::collectInformation() {
 		backlashX = stod(response.substr(response.find("BX:") + 3, response.find(" ", response.find("BX:")) - response.find("BX:") - 3));
 		backlashY = stod(response.substr(response.find("BY:") + 3));
 		
-		backlashSpeed = 2900;
+		// Get backlash speed
+		sendRequestBinary("M581");
+		response = receiveResponse();
 	
+		// Set backlash speed
+		backlashSpeed = stoi(response.substr(response.find("BS:") + 3));
+		
+		// Check if backlash speed hasn't been set
+		if(backlashSpeed == 0) {
+		
+			// Set backlash speed to default value
+			sendRequestBinary("M580 X1200");
+			receiveResponse();
+			backlashSpeed = 1200;
+		}
+		
 		// Get bed orientation
 		sendRequestBinary("M573");
 		response = receiveResponse();
@@ -674,10 +706,10 @@ bool Printer::collectInformation() {
 		
 		// Set filament location
 		temp = stoi(response.substr(response.find("P:") + 2, response.find(" ", response.find("P:")) - response.find("P:") - 2));
-		filamentLocation = (temp & 0xC0) == 0x40 ? INTERNAL : EXTERNAL;
+		filamentLocation = (temp & 0xC0) == 0x00 ? NO_LOCATION : (temp & 0xC0) == 0x40 ? INTERNAL : EXTERNAL;
 		
 		// Set filament type
-		filamentType = (temp & 0x3F) < 4 ? static_cast<filamentTypes>(temp & 0x3F) : UNKNOWN;
+		filamentType = (temp & 0x3F) < 4 ? static_cast<filamentTypes>(temp & 0x3F) : NO_TYPE;
 		
 		// Set filament color
 		temp = stoi(response.substr(response.find("S:") + 2, response.find(" ", response.find("S:")) - response.find("S:") - 2));
@@ -957,8 +989,9 @@ void Printer::translatorMode() {
 	char character;
 	string buffer;
 	int vd = posix_openpt(O_RDWR | O_NONBLOCK);
+	ifstream file;
 	
-	// Check if creating virtual serial port failed
+	// Check if creating virtual port failed
 	if(vd < 0)
 	
 		// Return
@@ -985,11 +1018,38 @@ void Printer::translatorMode() {
 	
 		// Close file and return
 		close(vd);
-		return ;
+		return;
+	}
+	
+	// Go through all device names
+	for(uint8_t i = 0; virtualSerialPortLocation.empty(); i++) {
+	
+		// Check if device name doesn't already exists
+		file.open("/dev/ttyACM" + to_string(i));
+		if(!file.good())
+		
+			// Set virtual serial port location
+			virtualSerialPortLocation = "/dev/ttyACM" + to_string(i);
+	}
+	
+	// Check if creating a symbolic link between virtual port and serial port failed
+	if(symlink(ptsname(vd), virtualSerialPortLocation.c_str()) < 0) {
+	
+		// Close file and return
+		close(vd);
+		return;
+	}
+	
+	// Check if changing permission of virtual port failed
+	if(chmod(virtualSerialPortLocation.c_str(), 0666) < 0) {
+	
+		// Close file and return
+		close(vd);
+		return;
 	}
 	
 	// Display message
-	cout << "Translation port established at " << ptsname(vd) << endl;
+	cout << "Translation port established at " << virtualSerialPortLocation << endl;
 	
 	// Loop forever
 	while(1) {
@@ -2414,7 +2474,7 @@ bool Printer::backlashCompensationPreprocessor() {
 	fstream processedFile(workingFolderLocation + "/output.gcode", ios::in | ios::binary);
 	fstream temp(workingFolderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
 	bool relativeMode = true;
-	string valueF = "2000";
+	string valueF = "1000";
 	directions directionX, directionY, previousDirectionX = NEITHER, previousDirectionY = NEITHER;
 	double compensationX = 0, compensationY = 0;
 	double positionRelativeX = 0, positionRelativeY = 0, positionRelativeZ = 0, positionRelativeE = 0;

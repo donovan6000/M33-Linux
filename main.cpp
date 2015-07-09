@@ -2,22 +2,42 @@
 #include <iostream>
 #include <fstream>
 #include <cstring>
+#include <signal.h>
+#include <unistd.h>
 #include "printer.h"
 
 using namespace std;
+
+
+// Global variables
+Printer printer;
+
+
+// Function prototypes
+void breakHandler(int signal);
 
 
 // Main function
 int main(int argc, char *argv[]) {
 
 	// Initialize variables
-	Printer printer;
 	string response, line, firmwareRom, gcodeFile;
 	ifstream file;
 	bool translate = false;
 	
+	// Attach break handler
+	signal(SIGINT, breakHandler);
+	
 	// Display version
 	cout << "M3D Linux V0.8" << endl << endl;
+	
+	// Check if not root
+    	if(getuid()) {
+
+    		// Display error
+		cout << "Elevated privileges required" << endl;
+		return 0;
+	}
 	
 	// Go through all commands
 	for(uint8_t i = 0; i < argc; i++) {
@@ -137,6 +157,30 @@ int main(int argc, char *argv[]) {
 			return 0;
 		}
 		
+		// Go through the file name
+		for(uint8_t i = 0; i < firmwareRom.size(); i++) {
+		
+			// Check if extension is occuring
+			if(firmwareRom[i] == '.') {
+			
+				// Break if file name beings with 10 numbers
+				if(i == 10)
+					break;
+				
+				// Display error
+				cout << "Invalid firmware ROM name" << endl;
+				return 0;
+			}
+			
+			// Check if current character isn't a digit
+			if(firmwareRom[i] < '0' || firmwareRom[i] > '9') {
+			
+				// Display error
+				cout << "Invalid firmware ROM name" << endl;
+				return 0;
+			}
+		}
+		
 		// Close file
 		file.close();
 	}
@@ -185,6 +229,21 @@ int main(int argc, char *argv[]) {
 				cout << "Failed to update firmware" << endl;
 				return 0;
 			}
+		}
+	}
+	
+	// Check if printer's firmware is outdated
+	if(!firmwareRom.empty() && !printer.getFirmwareVersion().empty() && stoi(printer.getFirmwareVersion()) < stoi(firmwareRom)) {
+	
+		// Display error
+		cout << "Printer's firmware is outdated" << endl << "Updating firmware" << endl;
+	
+		// Check if updating printer's firmware failed
+		if(!printer.updateFirmware(firmwareRom.c_str())) {
+	
+			// Display error
+			cout << "Failed to update firmware" << endl;
+			return 0;
 		}
 	}
 	
@@ -273,4 +332,11 @@ int main(int argc, char *argv[]) {
 	
 	// Return 0
 	return 0;
+}
+
+// Supporting function implementation
+void breakHandler(int signal) {
+
+	// Exit so that destructor is called on printer
+	exit(0);
 }

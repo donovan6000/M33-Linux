@@ -4,7 +4,7 @@
 A Linux program that can communicate with the Micro M3D printer
 <br>
 <br>
-You can download an the latest executable <a href="https://www.exploitkings.com/public/m3d-linux-V0.6.zip">here</a> or the deb package <a href="https://www.exploitkings.com/public/m3d-linux-V0.6.deb">here.</a>
+You can download an the latest executable <a href="https://www.exploitkings.com/public/m3d-linux-V0.7.zip">here</a> or the deb package <a href="https://www.exploitkings.com/public/m3d-linux-V0.7.deb">here</a>.
 <br>
 <br>
 The parameters that can be provided when running this program are as follows:
@@ -38,8 +38,3 @@ The 90-m3d-local.rules needs to applied in order to avoid issues. You can apply 
 cp ./90-m3d-local.rules /etc/udev/rules.d/
 <br>
 sudo /etc/init.d/udev restart
-<br>
-<br>
-TODO:
-* Process the G-code data being sent before hand to prevent delays between consecutive commands
-* Maybe create a GUI

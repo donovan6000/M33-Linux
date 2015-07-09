@@ -3,11 +3,18 @@ Copyright (c) 2015 donovan6000
 
 Changelog:
 
-V0.6 July &, 2015
+V0.7 July 8, 2015
+
+	* Fixed jerky movements by using the printers line number communication system for buffering
+	* Fixed percent (Thanks jsc69)
+	* If the system variables are set, the temporary files are created in TEMP, TMP, or TMPDIR (Thanks TonyH)
+	* Fixed bug in Z calibration that would hang forever
+
+V0.6 July 7, 2015
 
 	* Moved all the pre-processor code to the printer library
 	* Added a CLI
-	* Added a validation pre-processor stage that removed M82, M82, and T commands
+	* Added a validation pre-processor stage that removed M82, M82, and T commands (Thanks MrBeta)
 
 V0.5 July 7, 2015
 

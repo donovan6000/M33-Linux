@@ -112,6 +112,7 @@ class Printer {
 		*/
 		bool sendRequest(const char *data);
 		bool sendRequest(const string &data);
+		bool sendRequest(const Gcode &data);
 	
 		/*
 		Name: Receive Response
@@ -147,8 +148,9 @@ class Printer {
 		// Send data to the printer
 		bool sendRequestAscii(char data);
 		bool sendRequestAscii(const char *data);
+		bool sendRequestAscii(const Gcode &data);
 		bool sendRequestBinary(const char *data);
-		bool sendRequestPreprocessedBinary(const string &data);
+		bool sendRequestBinary(const Gcode &data);
 		
 		// Receive data from the printer
 		string receiveResponseAscii();

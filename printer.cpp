@@ -5,6 +5,7 @@
 #include <cstring>
 #include <cmath>
 #include <cfloat>
+#include <queue>
 #include <unistd.h>
 #include <fcntl.h>
 #include <termios.h>
@@ -64,6 +65,9 @@ const uint32_t crc32Table[] = {0x00000000, 0x77073096, 0xEE0E612C, 0x990951BA, 0
 // Supporting function implementation
 Printer::Printer() {
 
+	// Initialize variables
+	char* tempPath;
+
 	// Clear file descriptor
 	fd = -1;
 	
@@ -73,8 +77,15 @@ Printer::Printer() {
 	// Set bootloader mode
 	bootloaderMode = true;
 	
+	// Get temp directory
+	tempPath = getenv("TEMP");
+	if(tempPath == NULL)
+		 tempPath = getenv("TMP");
+	if(tempPath == NULL)
+		 tempPath = getenv("TMPDIR");
+	
 	// Create temporary folder
-	workingFolderLocation = mkdtemp(const_cast<char *>(static_cast<string>("/tmp/m3d-XXXXXX").c_str()));
+	workingFolderLocation = mkdtemp(const_cast<char *>((static_cast<string>(tempPath == NULL ? P_tmpdir : tempPath) + "/m3d-XXXXXX").c_str()));
 	
 	// Clear all use pre-processor stages
 	useValidation = false;
@@ -696,6 +707,12 @@ bool Printer::sendRequest(const string &data) {
 	// Return if data was sent 
 	return sendRequest(data.c_str());
 }
+
+bool Printer::sendRequest(const Gcode &data) {
+
+	// Send data based on if in bootloader mode
+	return bootloaderMode ? sendRequestAscii(data) : sendRequestBinary(data);
+}
 	
 string Printer::receiveResponse() {
 
@@ -709,6 +726,11 @@ bool Printer::printFile(const char *file) {
 	fstream processedFile;
 	ifstream input;
 	string line, response;
+	Gcode gcode;
+	queue<string> buffer;
+	char character;
+	uint8_t commandsSent = 0;
+	uint16_t lineNumber = 0;
 	uint64_t totalLines = 0, lineCounter = 0;
 	
 	// Check if opening input and creating processed file wern't successful
@@ -774,51 +796,102 @@ bool Printer::printFile(const char *file) {
 		feedRateConversionPreprocessor();
 	}
 	
-	// Determine the number of command lines in the fully processed file
+	// Go through the fully processed file
 	processedFile.open(workingFolderLocation + "/output.gcode", ios::in | ios::binary);
 	while(processedFile.peek() != EOF) {
+	
+		// Check if line contains valid g-code
 		getline(processedFile, line);
-		totalLines++;
+		if(gcode.parseLine(line))
+		
+			// Increment total lines
+			totalLines++;
 	}
+	
+	// Add number of reset line number commands to total lines
+	totalLines += 1 + totalLines / UINT16_MAX;
+	
+	// Go to the beginning of the fully processed file
 	processedFile.clear();
 	processedFile.seekg(0, ios::beg);
 	
 	// Display message
-	cout << "Starting print" << endl;
+	cout << "Starting print" << endl << endl;
 
-	// Go through file
-	while(processedFile.peek() != EOF) {
-
-		// Get line
-		getline(processedFile, line);
-
-		// Display percent complete
-		lineCounter++;
-		cout << dec << lineCounter << '/' << totalLines << ' ' << fixed << static_cast<float>(lineCounter) / totalLines << '%' << endl;
-
-		// Send line to the device
-		do {
+	// Go through all commands
+	while(processedFile.peek() != EOF || commandsSent != 0) {
+		
+		// Check if new g-code can be sent
+		if(processedFile.peek() != EOF && commandsSent <= 5) {
+		
+			// Check if sending line number zero
+			if(!lineNumber)
+		
+				// Set line to reset line number command
+				line = "M110";
+		
+			// Otherwise
+			else
+		
+				// Get line
+				getline(processedFile, line);
+		}
+		
+		// Otherwise
+		else
+		
+			// Clear line
+			line.clear();
+		
+		// Check if line contains valid g-code
+		if(gcode.parseLine(line)) {
+		
+			// Set command's line number
+			gcode.setValue('N', to_string(lineNumber++));
+		
+			// Send request
+			sendRequest(gcode);
+		
+			// Append request to buffer
+			buffer.push(gcode.getAscii());
+		
+			// Increment commands sent
+			commandsSent++;
+		}
+		
+		// Wait before checking for a response
+		usleep(500);
+		
+		// Go through all responses if avaliable
+		while(read(fd, &character, 1) != -1) {
+		
+			// Get response
+			response = character + receiveResponse();
 			
-			// Get next command if line didn't contain valid g-code
-			if(!sendRequest(line)) {
-			
-				cout << "Failed to parse " << line << endl << endl;
-				break;
+			// Check if response was a processed value
+			if(response.substr(0, 2) == "ok") {
+				
+				// Display message
+				cout << "Processed: " << buffer.front() << endl;
+				
+				// Remove command from buffer
+				commandsSent--;
+				lineCounter++;
+				buffer.pop();
+				
+				// Display percent complete
+				cout << dec << lineCounter << '/' << totalLines << ' ' << fixed << static_cast<float>(lineCounter) / totalLines * 100 << '%' << endl << endl;
 			}
 			
-			// Display command
-			cout << "Send: " << line << endl;
+			// Otherwise check if response was a resend value
+			else if(response.substr(0, 7) == "Resend:")
+				
+				// Resend request
+				sendRequest(buffer.front());
 			
-			// Get valid response
-			do {
-				response = receiveResponse();
-				while(response == "Info:Too small" || response.substr(0, 2) == "T:")
-					response = receiveResponse();
-			} while(response.empty());
-			
-			// Display response
-			cout << "Receive: " << response << endl << endl;
-		} while(response.substr(0, 2) != "ok");
+			// Wait before receiving next response
+			usleep(500);
+		}
 	}
 	
 	// Close processed file
@@ -904,18 +977,37 @@ bool Printer::sendRequestAscii(const char *data) {
 	return returnValue;
 }
 
+bool Printer::sendRequestAscii(const Gcode &data) {
+
+	// Initialize variables
+	bool returnValue;
+	string request = data.getAscii();
+
+	// Send data to the device
+	tcflush(fd, TCIOFLUSH);
+	returnValue = write(fd, request.c_str(), request.size()) != -1;
+	tcdrain(fd);
+	
+	// Return value
+	return returnValue;
+}
+
 bool Printer::sendRequestBinary(const char *data) {
 
 	// Initialize variables
 	bool returnValue;
 	Gcode gcode;
+	vector<uint8_t> request;
 	
 	// Check if line was successfully parsed
 	if(gcode.parseLine(data)) {
 	
+		// Get binary data
+		request = gcode.getBinary();
+	
 		// Send binary request to the device
 		tcflush(fd, TCIOFLUSH);
-		returnValue = write(fd, gcode.getBinary().data(), gcode.getBinary().size()) != -1;
+		returnValue = write(fd, request.data(), request.size()) != -1;
 		tcdrain(fd);
 		
 		// Set bootloader mode and reconnect if necessary
@@ -929,6 +1021,26 @@ bool Printer::sendRequestBinary(const char *data) {
 	
 	// Return false
 	return false;
+}
+
+bool Printer::sendRequestBinary(const Gcode &data) {
+
+	// Initialize variables
+	bool returnValue;
+	vector<uint8_t> request = data.getBinary();
+	
+	// Send binary request to the device
+	tcflush(fd, TCIOFLUSH);
+	returnValue = write(fd, request.data(), request.size()) != -1;
+	tcdrain(fd);
+	
+	// Set bootloader mode and reconnect if necessary
+	bootloaderMode = data.getValue('M') == "115" && data.getValue('S') == "628";
+	if(bootloaderMode)
+		while(!connect());
+	
+	// Return value
+	return returnValue;
 }
 
 string Printer::receiveResponseAscii() {
@@ -974,8 +1086,7 @@ string Printer::receiveResponseBinary() {
 	// Get response
 	while(character != '\n') {
 		response.push_back(character);
-		while(read(fd, &character, 1) == -1)
-			usleep(50);
+		while(read(fd, &character, 1) == -1);
 	}
 	
 	// Return response

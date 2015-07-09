@@ -16,7 +16,7 @@ int main(int argc, char *argv[]) {
 	ifstream file;
 	
 	// Display version
-	cout << "M3D Linux V0.6" << endl << endl;
+	cout << "M3D Linux V0.7" << endl << endl;
 	
 	// Go through all commands
 	for(uint8_t i = 0; i < argc; i++) {

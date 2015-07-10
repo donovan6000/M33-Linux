@@ -98,7 +98,7 @@ bool Gcode::parseLine(const char *line) {
 	for(uint8_t i = 0; i <= strlen(commandStart); i++) {
 	
 		// Check if a parameter is detected
-		if(i == 0 || commandStart[i - 1] == ' ' || commandStart[i - 1] == '\t' || commandStart[i - 1] == '\r' || commandStart[i - 1] == '\n' || commandStart[i] == ';' || !commandStart[i]) {
+		if(i == 0 || (commandStart[i] >= 'A' && commandStart[i] <= 'Z') || commandStart[i] == ';' || commandStart[i] == '*' || !commandStart[i]) {
 		
 			// Check if value has been obtained for the parameter
 			if(i) {
@@ -265,10 +265,10 @@ bool Gcode::parseLine(const char *line) {
 				}
 			}
 			
-			// Check if a comment is detected
-			if(commandStart[i] == ';')
+			// Check if a comment or checksum is detected
+			if(commandStart[i] == ';' || commandStart[i] == '*')
 		
-				// Stop parsing commandStart
+				// Stop parsing
 				break;
 			
 			// Set parameter identifier
@@ -324,8 +324,8 @@ vector<uint8_t> Gcode::getBinary() const {
 			// Set fifth byte of request to string length
 			request.push_back(parameterValue[15].size());
 		
-		// Check if command contains N
-		if(dataType & 1) {
+		// Check if command contains N and a value
+		if(dataType & 1 && !parameterValue[0].empty()) {
 		
 			// Set 2 byte integer parameter value
 			tempNumber = stoi(parameterValue[0]);
@@ -333,8 +333,8 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((tempNumber >> 8) & 0xFF);
 		}
 		
-		// Check if command contains M
-		if(dataType & (1 << 1)) {
+		// Check if command contains M and a value
+		if(dataType & (1 << 1) && !parameterValue[1].empty()) {
 		
 			// Set 2 byte integer parameter value
 			tempNumber = stoi(parameterValue[1]);
@@ -342,8 +342,8 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((tempNumber >> 8) & 0xFF);
 		}
 		
-		// Check if command contains G
-		if(dataType & (1 << 2)) {
+		// Check if command contains G and a value
+		if(dataType & (1 << 2) && !parameterValue[2].empty()) {
 		
 			// Set 2 byte integer parameter value
 			tempNumber = stoi(parameterValue[2]);
@@ -351,8 +351,8 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((tempNumber >> 8) & 0xFF);
 		}
 		
-		// Check if command contains X
-		if(dataType & (1 << 3)) {
+		// Check if command contains X and a value
+		if(dataType & (1 << 3) && !parameterValue[3].empty()) {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[3]);
@@ -363,8 +363,8 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((*tempPointer >> 24) & 0xFF);
 		}
 		
-		// Check if command contains Y
-		if(dataType & (1 << 4)) {
+		// Check if command contains Y and a value
+		if(dataType & (1 << 4) && !parameterValue[4].empty()) {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[4]);
@@ -375,8 +375,8 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((*tempPointer >> 24) & 0xFF);
 		}
 		
-		// Check if command contains Z
-		if(dataType & (1 << 5)) {
+		// Check if command contains Z and a value
+		if(dataType & (1 << 5) && !parameterValue[5].empty()) {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[5]);
@@ -387,8 +387,8 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((*tempPointer >> 24) & 0xFF);
 		}
 		
-		// Check if command contains E
-		if(dataType & (1 << 6)) {
+		// Check if command contains E and a value
+		if(dataType & (1 << 6) && !parameterValue[6].empty()) {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[6]);
@@ -399,8 +399,8 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((*tempPointer >> 24) & 0xFF);
 		}
 		
-		// Check if command contains F
-		if(dataType & (1 << 8)) {
+		// Check if command contains F and a value
+		if(dataType & (1 << 8) && !parameterValue[7].empty()) {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[7]);
@@ -411,16 +411,16 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((*tempPointer >> 24) & 0xFF);
 		}
 		
-		// Check if command contains T
-		if(dataType & (1 << 9)) {
+		// Check if command contains T and a value
+		if(dataType & (1 << 9) && !parameterValue[8].empty()) {
 		
 			// Set 1 byte integer parameter value
 			tempNumber = stoi(parameterValue[8]);
 			request.push_back(tempNumber & 0xFF);
 		}
 		
-		// Check if command contains S
-		if(dataType & (1 << 10)) {
+		// Check if command contains S and a value
+		if(dataType & (1 << 10) && !parameterValue[9].empty()) {
 			
 			// Set 4 byte integer parameter value
 			tempNumber = stoi(parameterValue[9]);
@@ -430,8 +430,8 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((tempNumber >> 24) & 0xFF);
 		}
 		
-		// Check if command contains P
-		if(dataType & (1 << 11)) {
+		// Check if command contains P and a value
+		if(dataType & (1 << 11) && !parameterValue[10].empty()) {
 			
 			// Set 4 byte integer parameter value
 			tempNumber = stoi(parameterValue[10]);
@@ -441,8 +441,8 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((tempNumber >> 24) & 0xFF);
 		}
 		
-		// Check if command contains I
-		if(dataType & (1 << 16)) {
+		// Check if command contains I and a value
+		if(dataType & (1 << 16) && !parameterValue[11].empty()) {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[11]);
@@ -453,8 +453,8 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((*tempPointer >> 24) & 0xFF);
 		}
 		
-		// Check if command contains J
-		if(dataType & (1 << 17)) {
+		// Check if command contains J and a value
+		if(dataType & (1 << 17) && !parameterValue[12].empty()) {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[12]);
@@ -465,8 +465,8 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((*tempPointer >> 24) & 0xFF);
 		}
 		
-		// Check if command contains R
-		if(dataType & (1 << 18)) {
+		// Check if command contains R and a value
+		if(dataType & (1 << 18) && !parameterValue[13].empty()) {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[13]);
@@ -477,8 +477,8 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((*tempPointer >> 24) & 0xFF);
 		}
 		
-		// Check if command contains D
-		if(dataType & (1 << 19)) {
+		// Check if command contains D and a value
+		if(dataType & (1 << 19) && !parameterValue[14].empty()) {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[14]);

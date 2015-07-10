@@ -55,7 +55,7 @@ int main(int argc, char *argv[]) {
 			cout << "-l | --backlashcompensation: Use backlash compensation pre-processor" << endl;
 			cout << "-f | --feedrateconversion: Use feed rate conversion pre-processor" << endl;
 			cout << "-r | --firmwarerom: Use the following parameter as the firmware ROM in case firmware is corrupt" << endl;
-			cout << "-i | --inputfile: Use the following parameter as the G-code file to processes and send to the printer. G-code commands can be manually entered if not G-code file is not provided." << endl;
+			cout << "-i | --inputfile: Use the following parameter as the G-code file to processes and send to the printer. G-code commands can be manually entered if no G-code file is not provided." << endl;
 			cout << "-s | --translate: Uses the program as a middle man to communicate between the printer and other software" << endl;
 			cout << "-o | --outputfile: Use the following parameter as the G-code file to output after the input file has been processed by all the desired pre-processor stages." << endl << endl;
 			return 0;

@@ -274,6 +274,9 @@ class Printer {
 		// File descriptor
 		int fd;
 		
+		// Virtual port descriptor
+		int vd;
+		
 		// Virtual serial port location
 		string virtualSerialPortLocation;
 };

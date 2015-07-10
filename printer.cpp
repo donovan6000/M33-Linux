@@ -70,8 +70,9 @@ Printer::Printer() {
 	// Initialize variables
 	char* tempPath;
 
-	// Clear file descriptor
+	// Clear file descriptor and virtual port
 	fd = -1;
+	vd = -1;
 	
 	// Clear status
 	status = 0;
@@ -108,7 +109,11 @@ Printer::~Printer() {
 	// Delete temporary folder
 	rmdir(workingFolderLocation.c_str());
 	
-	// Delete symbolic link for virtual serial location
+	// Close virtual port descriptor if open
+	if(vd != -1)
+		close(vd);
+	
+	// Delete symbolic link for virtual serial port location
 	if(!virtualSerialPortLocation.empty())
 		unlink(virtualSerialPortLocation.c_str());
 }
@@ -387,8 +392,8 @@ bool Printer::updateFirmware(const char *file) {
 					// Otherwise
 					else
 	
-						// Send arbitrary value
-						sendRequestAscii('\x23');
+						// Send padding
+						sendRequestAscii(romEncryptionTable[0xFF]);
 				}
 
 				// Check if chip failed to be flashed
@@ -453,7 +458,7 @@ bool Printer::updateFirmware(const char *file) {
 					if(i % 2 == 0 && i == romBuffer.length() - 1)
 					
 						// Put padding
-						decryptedRom[i] = 0xff;
+						decryptedRom[i] = 0xFF;
 						
 					// Otherwise
 					else
@@ -466,7 +471,7 @@ bool Printer::updateFirmware(const char *file) {
 				else
 				
 					// Put padding
-					decryptedRom[i] = 0xff;
+					decryptedRom[i] = 0xFF;
 			}
 			
 			// Get rom crc
@@ -635,6 +640,9 @@ bool Printer::collectInformation() {
 		if(!connect())
 			return false;
 	}
+	
+	// Clear bootloader
+	bootloaderMode = false;
 	
 	// Catch substring errors
 	try {
@@ -944,7 +952,7 @@ bool Printer::processFile(const char *inputFile, const char *outputFile) {
 		processedFile.close();
 		
 		// Check if changing permission of output failed
-		if(chmod(outputFile, S_IRUSR | S_IRGRP | S_IROTH | S_IWUSR) < 0) {
+		if(chmod(outputFile, S_IRUSR | S_IRGRP | S_IROTH | S_IWUSR) == -1) {
 		
 			// Delete output file
 			unlink(outputFile);
@@ -952,7 +960,7 @@ bool Printer::processFile(const char *inputFile, const char *outputFile) {
 		}
 		
 		// Check if changing ownership of output failed
-		if(chown(outputFile, pwd->pw_uid, pwd->pw_gid) < 0) {
+		if(chown(outputFile, pwd->pw_uid, pwd->pw_gid) == -1) {
 		
 			// Delete output file
 			unlink(outputFile);
@@ -1148,27 +1156,26 @@ void Printer::translatorMode() {
 	// Initialize variables
 	char character;
 	string buffer;
-	int vd = posix_openpt(O_RDWR | O_NONBLOCK);
 	ifstream file;
 	
 	// Check if creating virtual port failed
-	if(vd < 0)
+	if((vd = posix_openpt(O_RDWR | O_NONBLOCK)) == -1)
 	
 		// Return
 		return;
 	
 	// Check if changing ownership failed
-	if(grantpt(vd) < 0) {
+	if(grantpt(vd) == -1) {
 	
-		// Close file and return
+		// Close virtual port
 		close(vd);
 		return;
 	}
 	
 	// Check if unlocking failed
-	if(unlockpt(vd) < 0) {
+	if(unlockpt(vd) == -1) {
 	
-		// Close file and return
+		// Close virtual port
 		close(vd);
 		return;
 	}
@@ -1176,13 +1183,13 @@ void Printer::translatorMode() {
 	// Check if failed to get location
 	if(ptsname(vd) == NULL) {
 	
-		// Close file and return
+		// Close virtual port
 		close(vd);
 		return;
 	}
 	
 	// Go through all serial device names
-	for(uint8_t i = 0; virtualSerialPortLocation.empty(); i++) {
+	for(uint16_t i = 0; i < UINT16_MAX && virtualSerialPortLocation.empty(); i++) {
 	
 		// Check if device name doesn't already exists
 		file.open("/dev/ttyACM" + to_string(i));
@@ -1195,19 +1202,26 @@ void Printer::translatorMode() {
 		file.close();
 	}
 	
+	// Check if no device names were avaliable
+	if(virtualSerialPortLocation.empty()) {
+	
+		// Close virtual port
+		close(vd);
+		return;
+	}
 	
 	// Check if creating a symbolic link between virtual port and serial port failed
-	if(symlink(ptsname(vd), virtualSerialPortLocation.c_str()) < 0) {
+	if(symlink(ptsname(vd), virtualSerialPortLocation.c_str()) == -1) {
 	
-		// Close file and return
+		// Close virtual port
 		close(vd);
 		return;
 	}
 	
 	// Check if changing permission of virtual port failed
-	if(chmod(virtualSerialPortLocation.c_str(), S_IRUSR | S_IRGRP | S_IROTH | S_IWUSR | S_IWGRP | S_IWOTH) < 0) {
+	if(chmod(virtualSerialPortLocation.c_str(), S_IRUSR | S_IRGRP | S_IROTH | S_IWUSR | S_IWGRP | S_IWOTH) == -1) {
 	
-		// Close file and return
+		// Close virtual port
 		close(vd);
 		return;
 	}
@@ -1238,17 +1252,10 @@ void Printer::translatorMode() {
 			}
 			
 			// Otherwise
-			else {
-			
-				// Check if request contains a checksum
-				if(buffer.find('*') != string::npos)
-				
-					// Remove checksum
-					buffer = buffer.substr(0, buffer.find('*'));
+			else
 				
 				// Send request to the printer
 				sendRequest(buffer);
-			}
 		}
 		
 		// Check if data is being sent from the printer

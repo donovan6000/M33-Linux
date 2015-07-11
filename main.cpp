@@ -237,6 +237,7 @@ int main(int argc, char *argv[]) {
 	// Display message
 	cout << "Connected to printer" << endl;
 	cout << "Initializing the device" << endl;
+	cout << "Checking if firmware is invalid" << endl;
 	
 	// Check if printer's firmware isn't valid
 	if(!printer.isFirmwareValid()) {
@@ -260,6 +261,8 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	
+	cout << "Firmware is valid" << endl << "Check if firmware is outdated" << endl;
+	
 	// Check if printer's firmware is outdated
 	if(!firmwareRom.empty() && !printer.getFirmwareVersion().empty() && stoi(printer.getFirmwareVersion()) < stoi(firmwareRom)) {
 	
@@ -275,6 +278,8 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	
+	cout << "Firmware is up-to-date" << endl << "Collecting printer information" << endl;
+	
 	// Check if collect printer information failed
 	if(!printer.collectInformation()) {
 	
@@ -282,6 +287,8 @@ int main(int argc, char *argv[]) {
 		cout << "Failed to collect printer information" << endl;
 		return 0;
 	}
+	
+	cout << "Printer information collected" << endl << "Checking if Z is valid" << endl;
 	
 	// Check if printer Z isn't valid
 	if(!printer.isZValid()) {
@@ -293,6 +300,8 @@ int main(int argc, char *argv[]) {
 		printer.calibrateZ();
 	}
 	
+	cout << "Z is valid" << endl << "Check if bed orientation is valid" << endl;
+	
 	// Check if printer bed orientation isn't valid
 	if(!printer.isBedOrientationValid()) {
 	
@@ -302,6 +311,8 @@ int main(int argc, char *argv[]) {
 		// Calibrate bed orientation
 		printer.calibrateBedOrientation();
 	}
+	
+	cout << "Bed orientation is valid" << endl << "Processing parameters" << endl;
 	
 	// Check if an output file was provided
 	if(!outputFile.empty())

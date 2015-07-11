@@ -641,6 +641,8 @@ bool Printer::collectInformation() {
 			return false;
 	}
 	
+	cout << "Printer in G-code processing mode" << endl;
+	
 	// Clear bootloader
 	bootloaderMode = false;
 	
@@ -650,14 +652,19 @@ bool Printer::collectInformation() {
 		// Get device info
 		sendRequestBinary("M115\r\n");
 		response = receiveResponse();
-	
+		cout << response << endl;
+		
 		// Set firmware and serial number 
 		firmwareVersion = response.substr(response.find("FIRMWARE_VERSION:") + 17, response.find(" ", response.find("FIRMWARE_VERSION:")) - response.find("FIRMWARE_VERSION:") - 17);
 		serialNumber = response.substr(response.find("SERIAL_NUMBER:") + 14);
 		
+		cout << "Firmware Version: " << firmwareVersion << endl;
+		cout << "Serial Number: " << serialNumber << endl;
+		
 		// Get bed offsets
 		sendRequestBinary("M578");
 		response = receiveResponse();
+		cout << response << endl;
 	
 		// Set bed offsets
 		backRightOffset = stod(response.substr(response.find("BRO:") + 4, response.find(" ", response.find("BRO:")) - response.find("BRO:") - 4));
@@ -665,18 +672,29 @@ bool Printer::collectInformation() {
 		frontRightOffset = stod(response.substr(response.find("FRO:") + 4, response.find(" ", response.find("FRO:")) - response.find("FRO:") - 4));
 		frontLeftOffset = stod(response.substr(response.find("FLO:") + 4, response.find(" ", response.find("FLO:")) - response.find("FLO:") - 4));
 		bedHeightOffset = stod(response.substr(response.find("ZO:") + 3));
-
+		
+		cout << "Back Right Offset: " << backRightOffset << endl;
+		cout << "Back Left Offset: " << backLeftOffset << endl;
+		cout << "Front Left Offset: " << frontLeftOffset << endl;
+		cout << "Front Right Offset: " << frontRightOffset << endl;
+		cout << "Bed Height Offset: " << bedHeightOffset << endl;
+		
 		// Get backlash X and Y
 		sendRequestBinary("M572");
 		response = receiveResponse();
+		cout << response << endl;
 	
 		// Set backlash values
 		backlashX = stod(response.substr(response.find("BX:") + 3, response.find(" ", response.find("BX:")) - response.find("BX:") - 3));
 		backlashY = stod(response.substr(response.find("BY:") + 3));
 		
+		cout << "Backlash X: " << backlashX << endl;
+		cout << "Backlash Y: " << backlashY << endl;
+		
 		// Get backlash speed
 		sendRequestBinary("M581");
 		response = receiveResponse();
+		cout << response << endl;
 	
 		// Set backlash speed
 		backlashSpeed = stoi(response.substr(response.find("BS:") + 3));
@@ -684,15 +702,19 @@ bool Printer::collectInformation() {
 		// Check if backlash speed hasn't been set
 		if(backlashSpeed == 0) {
 		
+			cout << "Backlash speed not set yet. Setting to default" << endl;
+			
 			// Set backlash speed to default value
 			sendRequestBinary("M580 X1200");
 			receiveResponse();
 			backlashSpeed = 1200;
 		}
+		cout << "Backlash Speed: " << backlashSpeed << endl;
 		
 		// Get bed orientation
 		sendRequestBinary("M573");
 		response = receiveResponse();
+		cout << response << endl;
 	
 		// Set bed orientation and valid bed orientation
 		backRightOrientation = stod(response.substr(response.find("BR:") + 3, response.find(" ", response.find("BR:")) - response.find("BR:") - 3));
@@ -700,18 +722,28 @@ bool Printer::collectInformation() {
 		frontLeftOrientation = stod(response.substr(response.find("FL:") + 3, response.find(" ", response.find("FL:")) - response.find("FL:") - 3));
 		frontRightOrientation = stod(response.substr(response.find("FR:") + 3));
 		validBedOrientation = (backRightOrientation != 0 || backLeftOrientation != 0 || frontLeftOrientation != 0 || frontRightOrientation != 0) && backRightOrientation >= -3 && backRightOrientation <= 3 && backLeftOrientation >= -3 && backLeftOrientation <= 3 && frontLeftOrientation >= -3 && frontLeftOrientation <= 3 && frontRightOrientation >= -3 && frontRightOrientation <= 3;
-	
+		
+		cout << "Back Right Orientation: " << backRightOrientation << endl;
+		cout << "Back Left Orientation: " << backLeftOrientation << endl;
+		cout << "Front Left Orientation: " << frontLeftOrientation << endl;
+		cout << "Front Right Orientation: " << frontRightOrientation << endl;
+		
 		// Get status
 		sendRequestBinary("M117");
 		response = receiveResponse();
+		cout << response << endl;
 	
 		// Set valid Z and status
 		validZ = response.find("ZV:1") != string::npos; 
 		status = stoi(response.substr(response.find("S:") + 2));
 		
+		cout << "Zalid Z: " << validZ << endl;
+		cout << "Status: " << static_cast<unsigned int>(status) << endl;
+		
 		// Get filament information
 		sendRequestBinary("M576");
 		response = receiveResponse();
+		cout << response << endl;
 		
 		// Set filament location
 		temp = stoi(response.substr(response.find("P:") + 2, response.find(" ", response.find("P:")) - response.find("P:") - 2));
@@ -726,6 +758,11 @@ bool Printer::collectInformation() {
 		
 		// Set filament temperature
 		filamentTemperature = stoi(response.substr(response.find("T:") + 2)) + 100;
+		
+		cout << "Filament Location: " << filamentLocation << endl;
+		cout << "Filament Type: " << filamentType << endl;
+		cout << "Filament Color: " << filamentColor<< endl;
+		cout << "Filament Temperature: " << filamentTemperature << endl;
 	}
 	
 	// Check if an out of range error has occured

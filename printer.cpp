@@ -728,8 +728,15 @@ bool Printer::collectInformation() {
 		filamentTemperature = stoi(response.substr(response.find("T:") + 2)) + 100;
 	}
 	
-	// Check if an error has occured
+	// Check if an out of range error has occured
 	catch(const out_of_range& exception) {
+	
+		// Return false
+		return false;
+	}
+	
+	// Check if an invalid argument error has occured
+	catch(const invalid_argument& exception) {
 	
 		// Return false
 		return false;

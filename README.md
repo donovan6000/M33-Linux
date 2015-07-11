@@ -4,7 +4,7 @@
 A Linux program that can communicate with the Micro M3D printer
 <br>
 <br>
-You can download an the latest executable <a href="https://www.exploitkings.com/public/m3d-linux-V0.10.zip">here</a> or the deb package <a href="https://www.exploitkings.com/public/m3d-linux-V0.10.deb">here</a>.
+You can download the latest executable <a href="https://www.exploitkings.com/public/m3d-linux-V0.11.zip">here</a> or the deb package <a href="https://www.exploitkings.com/public/m3d-linux-V0.11.deb">here</a>.
 <br>
 <br>
 The parameters that can be provided when running this program are as follows:
@@ -27,14 +27,14 @@ m3d-linux -v -p -w -t -b -l -f -r firmware.rom -i input.gcode -s -o output.gcode
 
 -r | --firmwarerom: Use the following parameter as the firmware ROM in case firmware is corrupt
 
--i | --inputfile: Use the following parameter as the G-code file to processes and send to the printer. G-code commands can be manually entered if not G-code file is not provided.
+-i | --inputfile: Use the following parameter as the G-code file to processes and send to the printer. G-code commands can be manually entered if no G-code file is not provided.
 
 -s | --translate: Uses the program as a middle man to communicate between the printer and other software
 
 -o | --outputfile: Use the following parameter as the G-code file to output after the input file has been processed by all the desired pre-processor stages.
 <br>
 <br>
-If the printer's firmware is corrupt, it will update the firmware if a rom is provided. Firmware roms must be named after their version number, ex: 2015062401.rom. If the Z calibration of the printer is invalid, it will calibrate it automatically. If a G-code file is provided and it contains a line that indicated the ideal temperature, ex: ;ideal temp:195, then that temperature will be used for printing. Otherwise the temperature stored in the printer's EEPROM will be used.
+If the printer's firmware is corrupt or the provided firmware rom is newer, it will update the firmware if a rom is provided. Firmware roms must be named after their version number, ex: 2015062401.rom. If the Z calibration of the printer is invalid, it will calibrate it automatically. If a G-code file is provided and it contains a line that indicated the ideal temperature, ex: ;ideal temp:195, then that temperature will be used for printing. Otherwise the temperature stored in the printer's EEPROM will be used.
 <br>
 <br>
 The 90-m3d-local.rules needs to applied in order to avoid issues. You can apply it like this:

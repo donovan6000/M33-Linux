@@ -29,15 +29,7 @@ int main(int argc, char *argv[]) {
 	signal(SIGINT, breakHandler);
 	
 	// Display version
-	cout << "M3D Linux V0.10" << endl << endl;
-	
-	// Check if not root
-    	if(getuid()) {
-
-    		// Display error
-		cout << "Elevated privileges required" << endl;
-		return 0;
-	}
+	cout << "M3D Linux V0.11" << endl << endl;
 	
 	// Go through all commands
 	for(uint8_t i = 0; i < argc; i++) {
@@ -158,10 +150,19 @@ int main(int argc, char *argv[]) {
 		}
 		
 		// Otherwise check if using with translate
-		else if(!strcmp(argv[i], "-s") || !strcmp(argv[i], "--translate"))
+		else if(!strcmp(argv[i], "-s") || !strcmp(argv[i], "--translate")) {
+		
+			// Check if not root
+		    	if(getuid()) {
+
+		    		// Display error
+				cout << "Elevated privileges required for translate mode" << endl;
+				return 0;
+			}
 		
 			// Set translate
 			translate = true;
+		}
 	}
 	
 	// Check if a firmware rom is provided

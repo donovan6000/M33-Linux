@@ -625,7 +625,7 @@ bool Printer::collectInformation() {
 	// Loop forever
 	while(1) {
 	
-		// Check if device is already in firmware mode
+		// Check if device is already in g-code processing mode
 		sendRequestAscii("M115\r\n");
 		while(read(fd, &character, 1) == -1);
 		if(character == 'e')
@@ -633,7 +633,7 @@ bool Printer::collectInformation() {
 			// Break
 			break;
 		
-		// Attempt to put device into firmware mode
+		// Attempt to put device into g-code processing mode
 		sendRequestAscii('Q');
 		
 		// Return false if failed to reconnect

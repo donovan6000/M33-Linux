@@ -3,6 +3,11 @@ Copyright (c) 2015 donovan6000
 
 Changelog:
 
+V0.11 July 10, 2015
+
+	* Improved G-code parser so that it works with commands that don't have whitespace, like how Cura sends N0M110
+	* Only forces elevated priveledges when using translate mode
+
 V0.10 July 9, 2015
 
 	* Added ability to process an input file with the desired pre-processor stages then outputting it to a file

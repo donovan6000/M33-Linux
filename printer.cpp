@@ -16,6 +16,30 @@
 
 // Definitions
 
+// EEPROM offsets
+#define EEPROM_BACKLASH_X 0
+#define EEPROM_BACKLASH_Y 1
+#define EEPROM_BACK_RIGHT_ORIENTATION 2
+#define EEPROM_BACK_LEFT_ORIENTATION 3
+#define EEPROM_FRONT_LEFT_ORIENTATION 4
+#define EEPROM_FRONT_RIGHT_ORIENTATION 5
+#define EEPROM_FILAMENT_COLOR 6
+#define EEPROM_FILAMENT_TYPE 7
+#define EEPROM_FILAMENT_TEMPERATURE 8
+#define EEPROM_FILAMENT_AMOUNT 9
+#define EEPROM_BACKLASH_EXPANSION_X_PLUS 10
+#define EEPROM_BACKLASH_EXPANSION_YL_PLUS 11
+#define EEPROM_BACKLASH_EXPANSION_YR_PLUS 12
+#define EEPROM_BACKLASH_EXPANSION_YR_MINUS 13
+#define EEPROM_BACKLASH_EXPANSION_Z 14
+#define EEPROM_BACKLASH_EXPANSION_E 15
+#define EEPROM_BACK_LEFT_OFFSET 16
+#define EEPROM_BACK_RIGHT_OFFSET 17
+#define EEPROM_FRONT_RIGHT_OFFSET 18
+#define EEPROM_FRONT_LEFT_OFFSET 19
+#define EEPROM_BACKLASH_SPEED 22
+#define EEPROM_BED_HEIGHT_OFFSET 32
+
 // Chip details
 #define CHIP_NAME ATxmega32C4
 #define CHIP_PAGE_SIZE 0x80
@@ -52,6 +76,7 @@ enum directions {POSITIVE, NEGATIVE, NEITHER};
 
 // Print tiers
 enum printTiers {LOW, MEDIUM, HIGH};
+
 
 // Rom decryption and encryption tables
 const uint8_t romDecryptionTable[] = {0x26, 0xE2, 0x63, 0xAC, 0x27, 0xDE, 0x0D, 0x94, 0x79, 0xAB, 0x29, 0x87, 0x14, 0x95, 0x1F, 0xAE, 0x5F, 0xED, 0x47, 0xCE, 0x60, 0xBC, 0x11, 0xC3, 0x42, 0xE3, 0x03, 0x8E, 0x6D, 0x9D, 0x6E, 0xF2, 0x4D, 0x84, 0x25, 0xFF, 0x40, 0xC0, 0x44, 0xFD, 0x0F, 0x9B, 0x67, 0x90, 0x16, 0xB4, 0x07, 0x80, 0x39, 0xFB, 0x1D, 0xF9, 0x5A, 0xCA, 0x57, 0xA9, 0x5E, 0xEF, 0x6B, 0xB6, 0x2F, 0x83, 0x65, 0x8A, 0x13, 0xF5, 0x3C, 0xDC, 0x37, 0xD3, 0x0A, 0xF4, 0x77, 0xF3, 0x20, 0xE8, 0x73, 0xDB, 0x7B, 0xBB, 0x0B, 0xFA, 0x64, 0x8F, 0x08, 0xA3, 0x7D, 0xEB, 0x5C, 0x9C, 0x3E, 0x8C, 0x30, 0xB0, 0x7F, 0xBE, 0x2A, 0xD0, 0x68, 0xA2, 0x22, 0xF7, 0x1C, 0xC2, 0x17, 0xCD, 0x78, 0xC7, 0x21, 0x9E, 0x70, 0x99, 0x1A, 0xF8, 0x58, 0xEA, 0x36, 0xB1, 0x69, 0xC9, 0x04, 0xEE, 0x3B, 0xD6, 0x34, 0xFE, 0x55, 0xE7, 0x1B, 0xA6, 0x4A, 0x9A, 0x54, 0xE6, 0x51, 0xA0, 0x4E, 0xCF, 0x32, 0x88, 0x48, 0xA4, 0x33, 0xA5, 0x5B, 0xB9, 0x62, 0xD4, 0x6F, 0x98, 0x6C, 0xE1, 0x53, 0xCB, 0x46, 0xDD, 0x01, 0xE5, 0x7A, 0x86, 0x75, 0xDF, 0x31, 0xD2, 0x02, 0x97, 0x66, 0xE4, 0x38, 0xEC, 0x12, 0xB7, 0x00, 0x93, 0x15, 0x8B, 0x6A, 0xC5, 0x71, 0x92, 0x45, 0xA1, 0x59, 0xF0, 0x06, 0xA8, 0x5D, 0x82, 0x2C, 0xC4, 0x43, 0xCC, 0x2D, 0xD5, 0x35, 0xD7, 0x3D, 0xB2, 0x74, 0xB3, 0x09, 0xC6, 0x7C, 0xBF, 0x2E, 0xB8, 0x28, 0x9F, 0x41, 0xBA, 0x10, 0xAF, 0x0C, 0xFC, 0x23, 0xD9, 0x49, 0xF6, 0x7E, 0x8D, 0x18, 0x96, 0x56, 0xD1, 0x2B, 0xAD, 0x4B, 0xC1, 0x4F, 0xC8, 0x3A, 0xF1, 0x1E, 0xBD, 0x4C, 0xDA, 0x50, 0xA7, 0x52, 0xE9, 0x76, 0xD8, 0x19, 0x91, 0x72, 0x85, 0x3F, 0x81, 0x61, 0xAA, 0x05, 0x89, 0x0E, 0xB5, 0x24, 0xE0};
@@ -160,6 +185,18 @@ bool Printer::connect() {
 	return false;
 }
 
+bool Printer::isBootloaderMode() {
+
+	// Check if printer is connected and receiving commands
+	if(fd != -1 && sendRequestAscii("M115"))
+	
+		// Return if in bootloader mode
+		return bootloaderMode = (receiveResponseAscii()[0] == 'B');
+	
+	// Return false
+	return false;
+}
+
 string Printer::getFirmwareVersion() {
 
 	// Return firmware version
@@ -177,7 +214,7 @@ bool Printer::isFirmwareValid() {
 	int32_t *tempPointer;
 
 	// Check if printer is connected and receiving commands
-	if(fd != -1 && sendRequestAscii("M115\r\n")) {
+	if(fd != -1 && sendRequestAscii("M115")) {
 	
 		// Check if in bootloader mode
 		if(receiveResponseAscii()[0] == 'B') {
@@ -224,6 +261,14 @@ bool Printer::isFirmwareValid() {
 				eepromFirmware <<= 8;
 				eepromFirmware += static_cast<uint8_t>(response[i]);
 			}
+			
+			// Check if firmware is deprecated
+			if(eepromFirmware < 150994944)
+			
+				// Return false
+				return false;
+			
+			// Set firmware version
 			firmwareVersion = to_string(eepromFirmware);
 		
 			// Get eeprom serial
@@ -302,7 +347,7 @@ bool Printer::updateFirmware(const char *file) {
 	uint8_t decryptedRom[CHIP_TOTAL_MEMORY];
 
 	// Check if printer is connected and receiving commands
-	if(fd != -1 && sendRequestAscii("M115\r\n")) {
+	if(fd != -1 && sendRequestAscii("M115")) {
 	
 		// Check if in bootloader mode
 		if(receiveResponseAscii()[0] == 'B') {
@@ -502,6 +547,9 @@ bool Printer::updateFirmware(const char *file) {
 
 					// Return false
 					return false;
+			
+			// Set firmware version
+			firmwareVersion = to_string(romVersion);
 		}
 		
 		// Return true
@@ -620,13 +668,14 @@ bool Printer::collectInformation() {
 	// Initialize variables
 	string response;
 	char character;
-	uint16_t temp;
+	uint32_t value;
+	float *valuePointer;
 
 	// Loop forever
 	while(1) {
 	
 		// Check if device is already in g-code processing mode
-		sendRequestAscii("M115\r\n");
+		sendRequestAscii("M115");
 		while(read(fd, &character, 1) == -1);
 		if(character == 'e')
 		
@@ -641,8 +690,6 @@ bool Printer::collectInformation() {
 			return false;
 	}
 	
-	cout << "Printer in G-code processing mode" << endl;
-	
 	// Clear bootloader
 	bootloaderMode = false;
 	
@@ -650,79 +697,126 @@ bool Printer::collectInformation() {
 	try {
 	
 		// Get device info
-		sendRequestBinary("M115\r\n");
+		sendRequest("M115");
 		response = receiveResponse();
-		cout << response << endl;
 		
 		// Set firmware and serial number 
 		firmwareVersion = response.substr(response.find("FIRMWARE_VERSION:") + 17, response.find(" ", response.find("FIRMWARE_VERSION:")) - response.find("FIRMWARE_VERSION:") - 17);
 		serialNumber = response.substr(response.find("SERIAL_NUMBER:") + 14);
 		
+		// Display values
 		cout << "Firmware Version: " << firmwareVersion << endl;
 		cout << "Serial Number: " << serialNumber << endl;
 		
-		// Get bed offsets
-		sendRequestBinary("M578");
+		// Get back right offset
+		sendRequest("M619 S" + to_string(EEPROM_BACK_RIGHT_OFFSET));
 		response = receiveResponse();
-		cout << response << endl;
-	
-		// Set bed offsets
-		backRightOffset = stod(response.substr(response.find("BRO:") + 4, response.find(" ", response.find("BRO:")) - response.find("BRO:") - 4));
-		backLeftOffset = stod(response.substr(response.find("BLO:") + 4, response.find(" ", response.find("BLO:")) - response.find("BLO:") - 4));
-		frontRightOffset = stod(response.substr(response.find("FRO:") + 4, response.find(" ", response.find("FRO:")) - response.find("FRO:") - 4));
-		frontLeftOffset = stod(response.substr(response.find("FLO:") + 4, response.find(" ", response.find("FLO:")) - response.find("FLO:") - 4));
-		bedHeightOffset = stod(response.substr(response.find("ZO:") + 3));
+		value = stoi(response.substr(response.find("DT:") + 3));
+		valuePointer = reinterpret_cast<float *>(&value);
+		backRightOffset = *valuePointer;
 		
+		// Get back left offset
+		sendRequest("M619 S" + to_string(EEPROM_BACK_LEFT_OFFSET));
+		response = receiveResponse();
+		value = stoi(response.substr(response.find("DT:") + 3));
+		valuePointer = reinterpret_cast<float *>(&value);
+		backLeftOffset = *valuePointer;
+		
+		// Get front left offset
+		sendRequest("M619 S" + to_string(EEPROM_FRONT_LEFT_OFFSET));
+		response = receiveResponse();
+		value = stoi(response.substr(response.find("DT:") + 3));
+		valuePointer = reinterpret_cast<float *>(&value);
+		frontLeftOffset = *valuePointer;
+		
+		// Get front right offset
+		sendRequest("M619 S" + to_string(EEPROM_FRONT_RIGHT_OFFSET));
+		response = receiveResponse();
+		value = stoi(response.substr(response.find("DT:") + 3));
+		valuePointer = reinterpret_cast<float *>(&value);
+		frontRightOffset = *valuePointer;
+		
+		// Get bed height offset
+		sendRequest("M619 S" + to_string(EEPROM_BED_HEIGHT_OFFSET));
+		response = receiveResponse();
+		value = stoi(response.substr(response.find("DT:") + 3));
+		valuePointer = reinterpret_cast<float *>(&value);
+		bedHeightOffset = *valuePointer;
+		
+		// Display values
 		cout << "Back Right Offset: " << backRightOffset << endl;
 		cout << "Back Left Offset: " << backLeftOffset << endl;
 		cout << "Front Left Offset: " << frontLeftOffset << endl;
 		cout << "Front Right Offset: " << frontRightOffset << endl;
 		cout << "Bed Height Offset: " << bedHeightOffset << endl;
 		
-		// Get backlash X and Y
-		sendRequestBinary("M572");
+		// Get backlash X
+		sendRequest("M619 S" + to_string(EEPROM_BACKLASH_X));
 		response = receiveResponse();
-		cout << response << endl;
-	
-		// Set backlash values
-		backlashX = stod(response.substr(response.find("BX:") + 3, response.find(" ", response.find("BX:")) - response.find("BX:") - 3));
-		backlashY = stod(response.substr(response.find("BY:") + 3));
+		value = stoi(response.substr(response.find("DT:") + 3));
+		valuePointer = reinterpret_cast<float *>(&value);
+		backlashX = *valuePointer;
 		
-		cout << "Backlash X: " << backlashX << endl;
-		cout << "Backlash Y: " << backlashY << endl;
+		// Get backlash Y
+		sendRequest("M619 S" + to_string(EEPROM_BACKLASH_Y));
+		response = receiveResponse();
+		value = stoi(response.substr(response.find("DT:") + 3));
+		valuePointer = reinterpret_cast<float *>(&value);
+		backlashY = *valuePointer;
 		
 		// Get backlash speed
-		sendRequestBinary("M581");
+		sendRequest("M619 S" + to_string(EEPROM_BACKLASH_SPEED));
 		response = receiveResponse();
-		cout << response << endl;
-	
-		// Set backlash speed
-		backlashSpeed = stoi(response.substr(response.find("BS:") + 3));
+		value = stoi(response.substr(response.find("DT:") + 3));
+		valuePointer = reinterpret_cast<float *>(&value);
+		backlashSpeed = *valuePointer;
 		
-		// Check if backlash speed hasn't been set
-		if(backlashSpeed == 0) {
+		// Check if backlash speed isn't valid
+		if(backlashSpeed <= 1 || backlashSpeed >= 5000) {
 		
-			cout << "Backlash speed not set yet. Setting to default" << endl;
-			
 			// Set backlash speed to default value
-			sendRequestBinary("M580 X1200");
+			sendRequestBinary("M618 S22 P1153138688");
 			receiveResponse();
-			backlashSpeed = 1200;
+			backlashSpeed = 1500;
 		}
+		
+		// Display values
+		cout << "Backlash X: " << backlashX << endl;
+		cout << "Backlash Y: " << backlashY << endl;
 		cout << "Backlash Speed: " << backlashSpeed << endl;
 		
-		// Get bed orientation
-		sendRequestBinary("M573");
+		// Get back right orientation
+		sendRequest("M619 S" + to_string(EEPROM_BACK_RIGHT_ORIENTATION));
 		response = receiveResponse();
-		cout << response << endl;
-	
-		// Set bed orientation and valid bed orientation
-		backRightOrientation = stod(response.substr(response.find("BR:") + 3, response.find(" ", response.find("BR:")) - response.find("BR:") - 3));
-		backLeftOrientation = stod(response.substr(response.find("BL:") + 3, response.find(" ", response.find("BL:")) - response.find("BL:") - 3));
-		frontLeftOrientation = stod(response.substr(response.find("FL:") + 3, response.find(" ", response.find("FL:")) - response.find("FL:") - 3));
-		frontRightOrientation = stod(response.substr(response.find("FR:") + 3));
+		value = stoi(response.substr(response.find("DT:") + 3));
+		valuePointer = reinterpret_cast<float *>(&value);
+		backRightOrientation = *valuePointer;
+		
+		// Get back left orientation
+		sendRequest("M619 S" + to_string(EEPROM_BACK_LEFT_ORIENTATION));
+		response = receiveResponse();
+		value = stoi(response.substr(response.find("DT:") + 3));
+		valuePointer = reinterpret_cast<float *>(&value);
+		backLeftOrientation = *valuePointer;
+		
+		// Get front left orientation
+		sendRequest("M619 S" + to_string(EEPROM_FRONT_LEFT_ORIENTATION));
+		response = receiveResponse();
+		value = stoi(response.substr(response.find("DT:") + 3));
+		valuePointer = reinterpret_cast<float *>(&value);
+		frontLeftOrientation = *valuePointer;
+		
+		// Get front right orientation
+		sendRequest("M619 S" + to_string(EEPROM_FRONT_RIGHT_ORIENTATION));
+		response = receiveResponse();
+		value = stoi(response.substr(response.find("DT:") + 3));
+		valuePointer = reinterpret_cast<float *>(&value);
+		frontRightOrientation = *valuePointer;
+		
+		// Set valid bed orientation
 		validBedOrientation = (backRightOrientation != 0 || backLeftOrientation != 0 || frontLeftOrientation != 0 || frontRightOrientation != 0) && backRightOrientation >= -3 && backRightOrientation <= 3 && backLeftOrientation >= -3 && backLeftOrientation <= 3 && frontLeftOrientation >= -3 && frontLeftOrientation <= 3 && frontRightOrientation >= -3 && frontRightOrientation <= 3;
 		
+		// Display values
 		cout << "Back Right Orientation: " << backRightOrientation << endl;
 		cout << "Back Left Orientation: " << backLeftOrientation << endl;
 		cout << "Front Left Orientation: " << frontLeftOrientation << endl;
@@ -731,7 +825,6 @@ bool Printer::collectInformation() {
 		// Get status
 		sendRequestBinary("M117");
 		response = receiveResponse();
-		cout << response << endl;
 	
 		// Set valid Z and status
 		validZ = response.find("ZV:1") != string::npos; 
@@ -740,25 +833,25 @@ bool Printer::collectInformation() {
 		cout << "Zalid Z: " << validZ << endl;
 		cout << "Status: " << static_cast<unsigned int>(status) << endl;
 		
-		// Get filament information
-		sendRequestBinary("M576");
+		// Get filament type
+		sendRequest("M619 S" + to_string(EEPROM_FILAMENT_TYPE));
 		response = receiveResponse();
-		cout << response << endl;
+		value = stoi(response.substr(response.find("DT:") + 3));
+		filamentLocation = (value & 0xC0) == 0x00 ? NO_LOCATION : (value & 0xC0) == 0x40 ? INTERNAL : EXTERNAL;
+		filamentType = (value & 0x3F) < 4 ? static_cast<filamentTypes>(value & 0x3F) : NO_TYPE;
 		
-		// Set filament location
-		temp = stoi(response.substr(response.find("P:") + 2, response.find(" ", response.find("P:")) - response.find("P:") - 2));
-		filamentLocation = (temp & 0xC0) == 0x00 ? NO_LOCATION : (temp & 0xC0) == 0x40 ? INTERNAL : EXTERNAL;
+		// Get filament color
+		sendRequest("M619 S" + to_string(EEPROM_FILAMENT_COLOR));
+		response = receiveResponse();
+		value = stoi(response.substr(response.find("DT:") + 3));
+		filamentColor = value <= 0x2C ? static_cast<filamentColors>(value) : OTHER_COLOR;
 		
-		// Set filament type
-		filamentType = (temp & 0x3F) < 4 ? static_cast<filamentTypes>(temp & 0x3F) : NO_TYPE;
+		// Get filament temperature
+		sendRequest("M619 S" + to_string(EEPROM_FILAMENT_TEMPERATURE));
+		response = receiveResponse();
+		filamentTemperature = stoi(response.substr(response.find("DT:") + 3)) + 100;
 		
-		// Set filament color
-		temp = stoi(response.substr(response.find("S:") + 2, response.find(" ", response.find("S:")) - response.find("S:") - 2));
-		filamentColor = temp <= 0x2C ? static_cast<filamentColors>(temp) : OTHER_COLOR;
-		
-		// Set filament temperature
-		filamentTemperature = stoi(response.substr(response.find("T:") + 2)) + 100;
-		
+		// Display values
 		cout << "Filament Location: " << filamentLocation << endl;
 		cout << "Filament Type: " << filamentType << endl;
 		cout << "Filament Color: " << filamentColor<< endl;
@@ -1201,6 +1294,8 @@ void Printer::translatorMode() {
 	char character;
 	string buffer;
 	ifstream file;
+	queue<string> commands;
+	Gcode gcode;
 	
 	// Check if creating virtual port failed
 	if((vd = posix_openpt(O_RDWR | O_NONBLOCK)) == -1)
@@ -1296,10 +1391,21 @@ void Printer::translatorMode() {
 			}
 			
 			// Otherwise
-			else
+			else {
+			
+				// Check if data contains a line number
+				if(gcode.parseLine(buffer) && gcode.hasValue('N')) {
+				
+					// Set buffer to value
+					buffer = gcode.getAscii();
+					
+					// Add request to queue
+					commands.push(buffer);
+				}
 				
 				// Send request to the printer
 				sendRequest(buffer);
+			}
 		}
 		
 		// Check if data is being sent from the printer
@@ -1311,11 +1417,31 @@ void Printer::translatorMode() {
 				buffer.push_back(character);
 			} while(read(fd, &character, 1) == 1);
 			
-			// Send response from printer
-			tcflush(vd, TCIOFLUSH);
-			if(write(vd, buffer.c_str(), buffer.size()) != static_cast<unsigned int>(buffer.size()))
-				return;
-			tcdrain(vd);
+			// Check if response was a processed value
+			if(buffer.length() >= 4 && buffer.substr(0, 3) == "ok " && buffer[3] >= '0' && buffer[3] <= '9') {
+			
+				// Set buffer to contain correct line number
+				buffer = "ok " + commands.front().substr(1, commands.front().find(' ') - 1) + '\n';
+			
+				// Remove command from queue
+				commands.pop();
+			}
+			
+			// Check if response was a resend value
+			if(buffer.substr(0, 7) == "Resend:")
+				
+				// Resend request
+				sendRequest(commands.front());
+			
+			// Otherwise
+			else {
+			
+				// Send response from printer
+				tcflush(vd, TCIOFLUSH);
+				if(write(vd, buffer.c_str(), buffer.size()) != static_cast<unsigned int>(buffer.size()))
+					return;
+				tcdrain(vd);
+			}
 		}
 		
 		// Wait
@@ -1873,7 +1999,7 @@ bool Printer::preparationPreprocessor() {
 		temp << "G0 E7.5 F2000" << endl;
 		temp << "G92 E0" << endl;
 		temp << "G90" << endl;
-		temp << "G0 F2400" << endl;
+		temp << "G0 Z0.4 F2400" << endl;
 		temp << "; can extrude" << endl;
 	
 		// Go through processed file

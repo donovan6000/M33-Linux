@@ -23,13 +23,13 @@ int main(int argc, char *argv[]) {
 	// Initialize variables
 	string response, line, firmwareRom, inputFile, outputFile;
 	ifstream file;
-	bool translate = false;
+	bool translate = false, forceFlash = false;
 	
 	// Attach break handler
 	signal(SIGINT, breakHandler);
 	
 	// Display version
-	cout << "M3D Linux V0.11" << endl << endl;
+	cout << "M3D Linux V0.12" << endl << endl;
 	
 	// Go through all commands
 	for(uint8_t i = 0; i < argc; i++) {
@@ -38,7 +38,7 @@ int main(int argc, char *argv[]) {
 		if(!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
 		
 			// Display help
-			cout << "Usage: m3d-linux -v -p -w -t -b -l -f -r firmware.rom -i input.gcode -s -o output.gcode" << endl;
+			cout << "Usage: m3d-linux -v -p -w -t -b -l -f -r firmware.rom -c -i input.gcode -s -o output.gcode" << endl;
 			cout << "-v | --validation: Use validation pre-processor" << endl;
 			cout << "-p | --preparation: Use preparation pre-processor" << endl;
 			cout << "-w | --wavebonding: Use wave bonding pre-processor" << endl;
@@ -46,7 +46,8 @@ int main(int argc, char *argv[]) {
 			cout << "-b | --bedcompensation: Use bed compensation pre-processor" << endl;
 			cout << "-l | --backlashcompensation: Use backlash compensation pre-processor" << endl;
 			cout << "-f | --feedrateconversion: Use feed rate conversion pre-processor" << endl;
-			cout << "-r | --firmwarerom: Use the following parameter as the firmware ROM in case firmware is corrupt" << endl;
+			cout << "-r | --firmwarerom: Use the following parameter as the firmware ROM in case firmware is corrupt or outdated" << endl;
+			cout << "-c | --forceflash: Forces the firmware to update to the provided ROM" << endl;
 			cout << "-i | --inputfile: Use the following parameter as the G-code file to processes and send to the printer. G-code commands can be manually entered if no G-code file is not provided." << endl;
 			cout << "-s | --translate: Uses the program as a middle man to communicate between the printer and other software" << endl;
 			cout << "-o | --outputfile: Use the following parameter as the G-code file to output after the input file has been processed by all the desired pre-processor stages." << endl << endl;
@@ -112,6 +113,12 @@ int main(int argc, char *argv[]) {
 				return 0;
 			}
 		}
+		
+		// Otherwise check if using force flash
+		else if(!strcmp(argv[i], "-c") || !strcmp(argv[i], "--forceflash"))
+		
+			// Set force flash
+			forceFlash = true;
 		
 		// Otherwise check if an input file is provided
 		else if(!strcmp(argv[i], "-i") || !strcmp(argv[i], "--inputfile")) {
@@ -229,6 +236,14 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 	
+	// Check if force flahs without a rom
+	if(forceFlash && firmwareRom.empty()) {
+	
+		// Display error
+		cout << "Cannot force flash when no ROM is provided" << endl;
+		return 0;
+	}
+	
 	// Wait for device to be connected
 	cout << "Attempting to connect to the printer" << endl;
 	while(!printer.connect())
@@ -236,14 +251,19 @@ int main(int argc, char *argv[]) {
 	
 	// Display message
 	cout << "Connected to printer" << endl;
-	cout << "Initializing the device" << endl;
-	cout << "Checking if firmware is invalid" << endl;
+	
+	// Check if a rom is provided and printer isn't in bootloader mode
+	if(!firmwareRom.empty() && !printer.isBootloaderMode())
+	
+		// Enter bootloader mode
+		printer.sendRequest("M115 S628");
 	
 	// Check if printer's firmware isn't valid
-	if(!printer.isFirmwareValid()) {
+	if(!printer.isFirmwareValid() || forceFlash) {
 	
 		// Display error
-		cout << "Printer's firmware is corrupt" << endl;
+		if(!forceFlash)
+			cout << "Printer's firmware is corrupt" << endl;
 		
 		// Check if a firmware rom is provided
 		if(!firmwareRom.empty()) {
@@ -261,8 +281,6 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	
-	cout << "Firmware is valid" << endl << "Check if firmware is outdated" << endl;
-	
 	// Check if printer's firmware is outdated
 	if(!firmwareRom.empty() && !printer.getFirmwareVersion().empty() && stoi(printer.getFirmwareVersion()) < stoi(firmwareRom)) {
 	
@@ -278,8 +296,6 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	
-	cout << "Firmware is up-to-date" << endl << "Collecting printer information" << endl;
-	
 	// Check if collect printer information failed
 	if(!printer.collectInformation()) {
 	
@@ -288,7 +304,13 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 	
-	cout << "Printer information collected" << endl << "Checking if Z is valid" << endl;
+	// Check if printer'a firmware is incompatible
+	if(stoi(printer.getFirmwareVersion()) < 2015071301) {
+	
+		// Display error
+		cout << "Printer's firmware is incompatible" << endl;
+		return 0;
+	}
 	
 	// Check if printer Z isn't valid
 	if(!printer.isZValid()) {
@@ -300,8 +322,6 @@ int main(int argc, char *argv[]) {
 		printer.calibrateZ();
 	}
 	
-	cout << "Z is valid" << endl << "Check if bed orientation is valid" << endl;
-	
 	// Check if printer bed orientation isn't valid
 	if(!printer.isBedOrientationValid()) {
 	
@@ -311,8 +331,6 @@ int main(int argc, char *argv[]) {
 		// Calibrate bed orientation
 		printer.calibrateBedOrientation();
 	}
-	
-	cout << "Bed orientation is valid" << endl << "Processing parameters" << endl;
 	
 	// Check if an output file was provided
 	if(!outputFile.empty())

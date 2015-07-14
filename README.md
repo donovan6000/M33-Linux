@@ -4,12 +4,12 @@
 A Linux program that can communicate with the Micro M3D printer
 <br>
 <br>
-You can download the latest executable <a href="https://www.exploitkings.com/public/m3d-linux-V0.11.zip">here</a> or the deb package <a href="https://www.exploitkings.com/public/m3d-linux-V0.11.deb">here</a>.
+You can download the latest executable <a href="https://www.exploitkings.com/public/m3d-linux-V0.12.zip">here</a> or the deb package <a href="https://www.exploitkings.com/public/m3d-linux-V0.12.deb">here</a>.
 <br>
 <br>
 The parameters that can be provided when running this program are as follows:
 <br>
-m3d-linux -v -p -w -t -b -l -f -r firmware.rom -i input.gcode -s -o output.gcode
+m3d-linux -v -p -w -t -b -l -f -r firmware.rom -c -i input.gcode -s -o output.gcode
 
 -v | --validation: Use validation pre-processor
 
@@ -25,7 +25,9 @@ m3d-linux -v -p -w -t -b -l -f -r firmware.rom -i input.gcode -s -o output.gcode
 
 -f | --feedrateconversion: Use feed rate conversion pre-processor
 
--r | --firmwarerom: Use the following parameter as the firmware ROM in case firmware is corrupt
+-r | --firmwarerom: Use the following parameter as the firmware ROM in case firmware is corrupt or outdated
+
+-c | --forceflash: Forces the firmware to update to the provided ROM
 
 -i | --inputfile: Use the following parameter as the G-code file to processes and send to the printer. G-code commands can be manually entered if no G-code file is not provided.
 

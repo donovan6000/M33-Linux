@@ -65,6 +65,12 @@ class Printer {
 		bool connect();
 		
 		/*
+		Name: Is Bootloader Mode
+		Purpose: Return is the printer is in bootloader mode
+		*/
+		bool isBootloaderMode();
+		
+		/*
 		Name: Get Firnware Version
 		Purpose: Returns the printer's firmware version
 		*/

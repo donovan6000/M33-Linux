@@ -3,6 +3,12 @@ Copyright (c) 2015 donovan6000
 
 Changelog:
 
+V0.12 July 14, 2015
+
+	* Added firmware version requirement
+	* Virtual serial port manages all the resends and confirmations itself, so all of the issues with line numbers are fixed
+	* Added a way to force the firmware ROM to flash instead of only flashing when corrupt or outdated
+
 V0.11 July 10, 2015
 
 	* Improved G-code parser so that it works with commands that don't have whitespace, like how Cura sends N0M110

@@ -4,12 +4,12 @@
 A Linux program that can communicate with the Micro M3D printer
 <br>
 <br>
-You can download the latest executable <a href="https://www.exploitkings.com/public/m3d-linux-V0.12.zip">here</a> or the deb package <a href="https://www.exploitkings.com/public/m3d-linux-V0.12.deb">here</a>.
+You can download the latest executable <a href="https://www.exploitkings.com/public/m3d-linux-V0.13.zip">here</a> or the deb package <a href="https://www.exploitkings.com/public/m3d-linux-V0.13.deb">here</a>.
 <br>
 <br>
 The parameters that can be provided when running this program are as follows:
 <br>
-m3d-linux -v -p -w -t -b -l -f -r firmware.rom -c -i input.gcode -s -o output.gcode
+m3d-linux -v -p -w -t -b -l -f -r firmware.rom -c -i input.gcode -s -o output.gcode -e
 
 -v | --validation: Use validation pre-processor
 
@@ -34,6 +34,8 @@ m3d-linux -v -p -w -t -b -l -f -r firmware.rom -c -i input.gcode -s -o output.gc
 -s | --translate: Uses the program as a middle man to communicate between the printer and other software
 
 -o | --outputfile: Use the following parameter as the G-code file to output after the input file has been processed by all the desired pre-processor stages.
+
+-e | --settings: Uses values from settings file instead of obtaining them from the printer
 <br>
 <br>
 If the printer's firmware is corrupt or the provided firmware rom is newer, it will update the firmware if a rom is provided. Firmware roms must be named after their version number, ex: 2015062401.rom. If the Z calibration of the printer is invalid, it will calibrate it automatically. If a G-code file is provided and it contains a line that indicated the ideal temperature, ex: ;ideal temp:195, then that temperature will be used for printing. Otherwise the temperature stored in the printer's EEPROM will be used.

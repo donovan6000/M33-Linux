@@ -147,6 +147,7 @@ bool Printer::connect() {
 
 	// Initialize variables
         termios settings;
+        flock lock;
         
         // Close file descriptor if open
         if(fd != -1)
@@ -160,6 +161,16 @@ bool Printer::connect() {
 		
 		// Check if opening device was successful
 		if((fd = open("/dev/micro_m3d", O_RDWR | O_NONBLOCK)) != -1) {
+		
+			// Create file lock
+			lock.l_type = F_WRLCK;
+			lock.l_start = 0;
+			lock.l_whence = SEEK_SET;
+			lock.l_len = 0;
+			
+			// Check if file is already locked by another process
+			if(fcntl(fd, F_SETLK, &lock) == -1)
+				return false;
 	      
 			// Set serial protocol to 8n1 with 115200 baud rate
 			memset(&settings, 0, sizeof(settings));
@@ -693,7 +704,7 @@ bool Printer::collectInformation() {
 	// Clear bootloader
 	bootloaderMode = false;
 	
-	// Catch substring errors
+	// Catch string errors
 	try {
 	
 		// Get device info
@@ -869,6 +880,14 @@ bool Printer::collectInformation() {
 	catch(const invalid_argument& exception) {
 	
 		// Return false
+		return false;
+	}
+	
+	// Check if creating settings file failes
+	if(!createSettingsFile()) {
+	
+		// Display error
+		cout << "Could not create settings file" << endl;
 		return false;
 	}
 	
@@ -1635,6 +1654,173 @@ uint32_t Printer::crc32(int32_t offset, const uint8_t *data, int32_t count) {
 	
 	// Return updated crc
 	return crc ^ crc32Seed;
+}
+
+bool Printer::createSettingsFile() {
+
+	// Initialize variables
+	ofstream file("/usr/share/m3d-linux/settings", ios::out | ios::binary);
+	char userName[256];
+	passwd *pwd;
+	
+	// Check if creating settings file was successful
+	if(file.good()) {
+	
+		// Write values to file
+		file << "Back Right Offset: " << backRightOffset << endl;
+		file << "Back Left Offset: " << backLeftOffset << endl;
+		file << "Front Left Offset: " << frontLeftOffset << endl;
+		file << "Front Right Offset: " << frontRightOffset << endl;
+		file << "Bed Height Offset: " << bedHeightOffset << endl;
+		file << "Backlash X: " << backlashX << endl;
+		file << "Backlash Y: " << backlashY << endl;
+		file << "Backlash Speed: " << backlashSpeed << endl;
+		file << "Back Right Orientation: " << backRightOrientation << endl;
+		file << "Back Left Orientation: " << backLeftOrientation << endl;
+		file << "Front Left Orientation: " << frontLeftOrientation << endl;
+		file << "Front Right Orientation: " << frontRightOrientation << endl;
+		file << "Filament Location: " << filamentLocation << endl;
+		file << "Filament Type: " << filamentType << endl;
+		file << "Filament Color: " << filamentColor<< endl;
+		file << "Filament Temperature: " << filamentTemperature;
+		
+		// Close file
+		file.close();
+		
+		// Check if getting user name was successful
+		if(getlogin_r(userName, 256))
+		
+			// Return false
+			return false;
+		
+		// Check if getting group or user id failed
+		if((pwd = getpwnam(userName)) == NULL)
+		
+			// Return false
+			return false;
+		
+		// Check if changing permission of file failed
+		if(chmod("/usr/share/m3d-linux/settings", S_IRUSR | S_IRGRP | S_IROTH | S_IWUSR) == -1) {
+		
+			// Delete output file
+			unlink("/usr/share/m3d-linux/settings");
+			return false;
+		}
+		
+		// Check if changing ownership of file failed
+		if(chown("/usr/share/m3d-linux/settings", pwd->pw_uid, pwd->pw_gid) == -1) {
+		
+			// Delete output file
+			unlink("/usr/share/m3d-linux/settings");
+			return false;
+		}
+	
+		// Return true
+		return true;
+	}
+	
+	// Return false
+	return false;
+}
+
+bool Printer::useSettingsFile() {
+
+	// Initialize variables
+	string line;
+	ifstream file("/usr/share/m3d-linux/settings", ios::in | ios::binary);
+	
+	// Check if creating settings file was successful
+	if(file.good()) {
+	
+		// Go through entire file
+		while(file.peek() != EOF) {
+		
+			// Get line
+			getline(file, line);
+			
+			// Catch string errors
+			try {
+			
+				// Assign value based on line content
+				if(line.find("Back Right Offset") != string::npos)
+					backRightOffset = stod(line.substr(line.find(':') + 1));
+				
+				else if(line.find("Back Left Offset") != string::npos)
+					backLeftOffset = stod(line.substr(line.find(':') + 1));
+				
+				else if(line.find("Front Left Offset") != string::npos)
+					frontLeftOffset = stod(line.substr(line.find(':') + 1));
+				
+				else if(line.find("Front Right Offset") != string::npos)
+					frontRightOffset = stod(line.substr(line.find(':') + 1));
+				
+				else if(line.find("Bed Height Offset") != string::npos)
+					bedHeightOffset = stod(line.substr(line.find(':') + 1));
+				
+				else if(line.find("Backlash X") != string::npos)
+					backlashX = stod(line.substr(line.find(':') + 1));
+				
+				else if(line.find("Backlash Y") != string::npos)
+					backlashY = stod(line.substr(line.find(':') + 1));
+				
+				else if(line.find("Backlash Speed") != string::npos)
+					backlashSpeed = stod(line.substr(line.find(':') + 1));
+				
+				else if(line.find("Back Right Orientation") != string::npos)
+					backRightOrientation = stod(line.substr(line.find(':') + 1));
+				
+				else if(line.find("Back Left Orientation") != string::npos)
+					backLeftOrientation = stod(line.substr(line.find(':') + 1));
+				
+				else if(line.find("Front Left Orientation") != string::npos)
+					frontLeftOrientation = stod(line.substr(line.find(':') + 1));
+				
+				else if(line.find("Front Right Orientation") != string::npos)
+					frontRightOrientation = stod(line.substr(line.find(':') + 1));
+				
+				else if(line.find("Filament Location") != string::npos)
+					filamentLocation = static_cast<filamentLocations>(stoi(line.substr(line.find(':') + 1)));
+				
+				else if(line.find("Filament Type") != string::npos)
+					filamentType = static_cast<filamentTypes>(stoi(line.substr(line.find(':') + 1)));
+				
+				else if(line.find("Filament Color") != string::npos)
+					filamentColor = static_cast<filamentColors>(stoi(line.substr(line.find(':') + 1)));
+				
+				else if(line.find("Filament Temperature") != string::npos)
+					filamentTemperature = stoi(line.substr(line.find(':') + 1));
+			}
+			
+			// Check if an out of range error has occured
+			catch(const out_of_range& exception) {
+			
+				// Close file
+				file.close();
+	
+				// Return false
+				return false;
+			}
+	
+			// Check if an invalid argument error has occured
+			catch(const invalid_argument& exception) {
+			
+				// Close file
+				file.close();
+	
+				// Return false
+				return false;
+			}
+		}
+		
+		// Close file
+		file.close();
+	
+		// Return true
+		return true;
+	}
+	
+	// Return false
+	return false;
 }
 
 bool Printer::getPrintInformation() {

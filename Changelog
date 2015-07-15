@@ -3,6 +3,10 @@ Copyright (c) 2015 donovan6000
 
 Changelog:
 
+V0.13 July 15, 2015
+
+	* Saves printer settings to /usr/share/m3d-linux/settings whenever printer is connected. This allows the settings to be used for the pre-processor without the printer having to be connected
+
 V0.12 July 14, 2015
 
 	* Added firmware version requirement

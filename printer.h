@@ -161,6 +161,12 @@ class Printer {
 		Purpose: Acts as a translator for other software to communicate with the printer
 		*/
 		void translatorMode();
+		
+		/*
+		Name: Use settings file
+		Purpose: Reads in printer values from settings file
+		*/
+		bool useSettingsFile();
 	
 	// Private
 	private:
@@ -182,6 +188,9 @@ class Printer {
 		
 		// CRC32
 		uint32_t crc32(int32_t offset, const uint8_t *data, int32_t count);
+		
+		// Create settings file
+		bool createSettingsFile();
 		
 		// Get print information
 		bool getPrintInformation();

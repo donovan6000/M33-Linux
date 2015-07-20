@@ -23,13 +23,13 @@ int main(int argc, char *argv[]) {
 	// Initialize variables
 	string response, line, firmwareRom, inputFile, outputFile;
 	ifstream file;
-	bool translate = false, forceFlash = false, settings = false;
+	bool translate = false, forceFlash = false, settings = false, provided = false;
 	
 	// Attach break handler
 	signal(SIGINT, breakHandler);
 	
 	// Display version
-	cout << "M3D Linux V0.13" << endl << endl;
+	cout << "M3D Linux V0.14" << endl << endl;
 	
 	// Go through all commands
 	for(uint8_t i = 0; i < argc; i++) {
@@ -51,7 +51,17 @@ int main(int argc, char *argv[]) {
 			cout << "-i | --inputfile: Use the following parameter as the G-code file to processes and send to the printer. G-code commands can be manually entered if no G-code file is not provided." << endl;
 			cout << "-s | --translate: Uses the program as a middle man to communicate between the printer and other software" << endl;
 			cout << "-o | --outputfile: Use the following parameter as the G-code file to output after the input file has been processed by all the desired pre-processor stages." << endl;
-			cout << "-e | --settings: Uses values from settings file instead of obtaining them from the printer" << endl << endl;
+			cout << "-e | --settings: Uses values from settings file instead of obtaining them from the printer" << endl;
+			cout << "-d | --provided: Uses provided values instead of obtaining them from the printer" << endl;
+			cout << "--backlashX: Provide backlash X" << endl;
+			cout << "--backlashY: Provide backlash Y" << endl;
+			cout << "--backlashSpeed: Provide backlash Speed" << endl;
+			cout << "--filamentTemperature: Provide filament temperature" << endl;
+			cout << "--filamentType: Provide filament type" << endl;
+			cout << "--backRightOffset: Provide back right offset" << endl;
+			cout << "--backLeftOffset: Provide back left offset" << endl;
+			cout << "--frontLeftOffset: Provide front left offset" << endl;
+			cout << "--frontRightOffset: Provide front right offset" << endl << endl;
 			return 0;
 		}
 	
@@ -168,6 +178,174 @@ int main(int argc, char *argv[]) {
 		
 			// Set settings
 			settings = true;
+		
+		// Otherwise check if using provided
+		else if(!strcmp(argv[i], "-d") || !strcmp(argv[i], "--provided"))
+		
+			// Set provided
+			provided = true;
+		
+		// Otherwise check if a backlash X is provided
+		else if(!strcmp(argv[i], "--backlashX")) {
+		
+			// Check if backlash X parameter exists
+			if(i < argc - 1)
+			
+				// Set backlash X
+				printer.setBacklashX(argv[++i]);
+			
+			// Otherwise
+			else {
+			
+				// Display error
+				cout << "No backlash X provided" << endl;
+				return 0;
+			}
+		}
+		
+		// Otherwise check if a backlash Y is provided
+		else if(!strcmp(argv[i], "--backlashY")) {
+		
+			// Check if backlash Y parameter exists
+			if(i < argc - 1)
+			
+				// Set backlash Y
+				printer.setBacklashY(argv[++i]);
+			
+			// Otherwise
+			else {
+			
+				// Display error
+				cout << "No backlash Y provided" << endl;
+				return 0;
+			}
+		}
+		
+		// Otherwise check if a backlash speed is provided
+		else if(!strcmp(argv[i], "--backlashSpeed")) {
+		
+			// Check if backlash speed parameter exists
+			if(i < argc - 1)
+			
+				// Set backlash speed
+				printer.setBacklashSpeed(argv[++i]);
+			
+			// Otherwise
+			else {
+			
+				// Display error
+				cout << "No backlash speed provided" << endl;
+				return 0;
+			}
+		}
+		
+		// Otherwise check if a filament type is provided
+		else if(!strcmp(argv[i], "--filamentType")) {
+		
+			// Check if filament type parameter exists
+			if(i < argc - 1)
+			
+				// Set filament type
+				printer.setFilamentType(argv[++i]);
+			
+			// Otherwise
+			else {
+			
+				// Display error
+				cout << "No filament type provided" << endl;
+				return 0;
+			}
+		}
+		
+		// Otherwise check if a filament temperature is provided
+		else if(!strcmp(argv[i], "--filamentTemperature")) {
+		
+			// Check if filament temperature parameter exists
+			if(i < argc - 1)
+			
+				// Set filament type
+				printer.setFilamentTemperature(argv[++i]);
+			
+			// Otherwise
+			else {
+			
+				// Display error
+				cout << "No filament temperature provided" << endl;
+				return 0;
+			}
+		}
+		
+		// Otherwise check if a back right offset is provided
+		else if(!strcmp(argv[i], "--backRightOffset")) {
+		
+			// Check if back right offset parameter exists
+			if(i < argc - 1)
+			
+				// Set filament type
+				printer.setBackRightOffset(argv[++i]);
+			
+			// Otherwise
+			else {
+			
+				// Display error
+				cout << "No back right offset provided" << endl;
+				return 0;
+			}
+		}
+		
+		// Otherwise check if a back left offset is provided
+		else if(!strcmp(argv[i], "--backLeftOffset")) {
+		
+			// Check if back left offset parameter exists
+			if(i < argc - 1)
+			
+				// Set filament type
+				printer.setBackLeftOffset(argv[++i]);
+			
+			// Otherwise
+			else {
+			
+				// Display error
+				cout << "No back left offset provided" << endl;
+				return 0;
+			}
+		}
+		
+		// Otherwise check if a front left offset is provided
+		else if(!strcmp(argv[i], "--frontLeftOffset")) {
+		
+			// Check if front left offset parameter exists
+			if(i < argc - 1)
+			
+				// Set filament type
+				printer.setFrontLeftOffset(argv[++i]);
+			
+			// Otherwise
+			else {
+			
+				// Display error
+				cout << "No front left offset provided" << endl;
+				return 0;
+			}
+		}
+		
+		// Otherwise check if a front right offset is provided
+		else if(!strcmp(argv[i], "--frontRightOffset")) {
+		
+			// Check if front right offset parameter exists
+			if(i < argc - 1)
+			
+				// Set filament type
+				printer.setFrontRightOffset(argv[++i]);
+			
+			// Otherwise
+			else {
+			
+				// Display error
+				cout << "No front right offset provided" << endl;
+				return 0;
+			}
+		}
 	}
 	
 	// Check if a firmware rom is provided
@@ -256,6 +434,12 @@ int main(int argc, char *argv[]) {
 			return 0;
 		}
 	}
+	
+	// Otherwise check if using output file with provided values
+	else if(!outputFile.empty() && provided)
+	
+		// Display message
+		cout << "Using printer values that were provided" << endl;
 	
 	// Otherwise
 	else {

@@ -156,6 +156,21 @@ class Printer {
 		void setBacklashCompensationPreprocessor();
 		void setFeedRateConversionPreprocessor();
 		
+		
+		/*
+		Name: Set printer values
+		Purpose: Sets the printer settings for use in the pre-processor stages
+		*/
+		void setBacklashX(const string &value);
+		void setBacklashY(const string &value);
+		void setBacklashSpeed(const string &value);
+		void setBackRightOffset(const string &value);
+		void setBackLeftOffset(const string &value);
+		void setFrontLeftOffset(const string &value);
+		void setFrontRightOffset(const string &value);
+		void setFilamentTemperature(const string &value);
+		void setFilamentType(const string &value);
+		
 		/*
 		Name: Translator Mode
 		Purpose: Acts as a translator for other software to communicate with the printer

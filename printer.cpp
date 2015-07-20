@@ -123,6 +123,17 @@ Printer::Printer() {
 	useBedCompensation = false;
 	useBacklashCompensation = false;
 	useFeedRateConversion = false;
+	
+	// Set values to their defaults
+	backlashX = 0.3;
+	backlashY = 0.6;
+	backlashSpeed = 1500;
+	backRightOffset = 0;
+	backLeftOffset = 0;
+	frontLeftOffset = 0;
+	frontRightOffset = 0;
+	filamentTemperature = 200;
+	filamentType = PLA;
 }
 
 Printer::~Printer() {
@@ -927,7 +938,7 @@ bool Printer::processFile(const char *inputFile, const char *outputFile) {
 	ofstream output;
 	char userName[256];
 	passwd *pwd;
-
+	
 	// Check if opening input and creating processed file wern't successful
 	input.open(inputFile, ios::in | ios::binary);
 	processedFile.open(workingFolderLocation + "/output.gcode", ios::out | ios::binary | ios::app);
@@ -1307,6 +1318,69 @@ void Printer::setFeedRateConversionPreprocessor() {
 	useFeedRateConversion = true;
 }
 
+void Printer::setBacklashX(const string &value) {
+
+	// Set backlash X
+	backlashX = stod(value);
+}
+
+void Printer::setBacklashY(const string &value) {
+
+	// Set backlash Y
+	backlashY = stod(value);
+}
+
+void Printer::setBacklashSpeed(const string &value) {
+
+	// Set backlash speed
+	backlashSpeed = stod(value);
+}
+
+void Printer::setBackRightOffset(const string &value) {
+
+	// Set back right offset
+	backRightOffset = stod(value);
+}
+
+void Printer::setBackLeftOffset(const string &value) {
+
+	// Set back left offset
+	backLeftOffset = stod(value);
+}
+
+void Printer::setFrontLeftOffset(const string &value) {
+
+	// Set front left offset
+	frontLeftOffset = stod(value);
+}
+
+void Printer::setFrontRightOffset(const string &value) {
+
+	// Set front right offset
+	frontRightOffset = stod(value);
+}
+
+void Printer::setFilamentTemperature(const string &value) {
+
+	// Set filament temperature
+	filamentTemperature = stoi(value);
+}
+
+void Printer::setFilamentType(const string &value) {
+
+	// Set filament type
+	if(value == "ABS")
+		filamentType = ABS;
+	else if(value == "PLA")
+		filamentType = PLA;
+	else if(value == "HIPS")
+		filamentType = HIPS;
+	else if(value == "OTHER")
+		filamentType = OTHER;
+	else
+		filamentType = NO_TYPE;
+}
+
 void Printer::translatorMode() {
 
 	// Initialize variables
@@ -1659,9 +1733,17 @@ uint32_t Printer::crc32(int32_t offset, const uint8_t *data, int32_t count) {
 bool Printer::createSettingsFile() {
 
 	// Initialize variables
-	ofstream file("/usr/share/m3d-linux/settings", ios::out | ios::binary);
+	ofstream file;
 	char userName[256];
 	passwd *pwd;
+	struct stat buffer;
+	
+	// Check if creating folder failed if it doesn't already exists
+	if(stat("/usr/share/m3d-linux", &buffer) == -1 && mkdir("/usr/share/m3d-linux", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1)
+		return false;
+	
+	// Create settings file
+	file.open("/usr/share/m3d-linux/settings", ios::out | ios::binary);
 	
 	// Check if creating settings file was successful
 	if(file.good()) {

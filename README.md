@@ -4,12 +4,12 @@
 A Linux program that can communicate with the Micro M3D printer
 <br>
 <br>
-You can download the latest executable <a href="https://www.exploitkings.com/public/m3d-linux-V0.13.zip">here</a> or the deb package <a href="https://www.exploitkings.com/public/m3d-linux-V0.13.deb">here</a>.
+You can download the latest executable <a href="https://www.exploitkings.com/public/m3d-linux-V0.14.zip">here</a> or the deb package <a href="https://www.exploitkings.com/public/m3d-linux-V0.14.deb">here</a>.
 <br>
 <br>
 The parameters that can be provided when running this program are as follows:
 <br>
-m3d-linux -v -p -w -t -b -l -f -r firmware.rom -c -i input.gcode -s -o output.gcode -e
+m3d-linux -v -p -w -t -b -l -f -r firmware.rom -c -i input.gcode -s -o output.gcode -e -d
 
 -v | --validation: Use validation pre-processor
 
@@ -36,6 +36,27 @@ m3d-linux -v -p -w -t -b -l -f -r firmware.rom -c -i input.gcode -s -o output.gc
 -o | --outputfile: Use the following parameter as the G-code file to output after the input file has been processed by all the desired pre-processor stages.
 
 -e | --settings: Uses values from settings file instead of obtaining them from the printer
+
+-d | --provided: Uses provided values instead of obtaining them from the printer
+
+--backlashX: Provide backlash X
+
+--backlashY: Provide backlash Y
+
+--backlashSpeed: Provide backlash Speed
+
+--filamentTemperature: Provide filament temperature
+
+--filamentType: Provide filament type
+
+--backRightOffset: Provide back right offset
+
+--backLeftOffset: Provide back left offset
+
+--frontLeftOffset: Provide front left offset
+
+--frontRightOffset: Provide front right offset
+
 <br>
 <br>
 If the printer's firmware is corrupt or the provided firmware rom is newer, it will update the firmware if a rom is provided. Firmware roms must be named after their version number, ex: 2015062401.rom. If the Z calibration of the printer is invalid, it will calibrate it automatically. If a G-code file is provided and it contains a line that indicated the ideal temperature, ex: ;ideal temp:195, then that temperature will be used for printing. Otherwise the temperature stored in the printer's EEPROM will be used.

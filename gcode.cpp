@@ -70,7 +70,7 @@ bool Gcode::parseLine(const char *line) {
 	originalCommand = commandStart;
 	
 	// Remove trailing whitespace from original command
-	while(originalCommand.back() == ' ' || originalCommand.back() == '\t' || originalCommand.back() == '\r' || originalCommand.back() == '\n')
+	while(!originalCommand.empty() && (originalCommand.back() == ' ' || originalCommand.back() == '\t' || originalCommand.back() == '\r' || originalCommand.back() == '\n'))
 		originalCommand.pop_back();
 	
 	// Check if host command
@@ -98,7 +98,7 @@ bool Gcode::parseLine(const char *line) {
 	for(uint8_t i = 0; i <= strlen(commandStart); i++) {
 	
 		// Check if a parameter is detected
-		if(i == 0 || (commandStart[i] >= 'A' && commandStart[i] <= 'Z') || commandStart[i] == ';' || commandStart[i] == '*' || !commandStart[i]) {
+		if(i == 0 || (commandStart[i] >= 'A' && commandStart[i] <= 'Z') || commandStart[i] == ';' || commandStart[i] == '*' || commandStart[i] == ' ' || !commandStart[i]) {
 		
 			// Check if value has been obtained for the parameter
 			if(i) {

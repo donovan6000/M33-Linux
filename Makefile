@@ -18,5 +18,5 @@ install:
 	install $(PROG) /usr/sbin/$(PROG)
 
 package:
-	cp $(PROG) $(PROG)-0.13
-	cd $(PROG)-0.13 && fakeroot dpkg-buildpackage -b
+	cp $(PROG) $(PROG)-0.14
+	cd $(PROG)-0.14 && fakeroot dpkg-buildpackage -b

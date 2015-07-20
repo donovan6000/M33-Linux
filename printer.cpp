@@ -55,6 +55,9 @@
 // Thermal and wave bonding settings
 #define BONDING_HEIGHT_OFFSET -0.1L
 
+// Backlash compensation settings
+#define USE_LEGACY_BACKLASH false
+
 // Bed compensation settings
 #define CHANGE_IN_HEIGHT_THAT_DOUBLES_EXTRUSION 0.15L
 #define CHANGE_EXTRUSION_TO_COMPENSATE false
@@ -319,11 +322,11 @@ bool Printer::isFirmwareValid() {
 				}
 				else if(eepromFan == LISTENER) {
 					fanOffset = 145;
-					fanScale = 0.1666667;
+					fanScale = 0.3333333;
 				}
 				else {
 					fanOffset = 82;
-					fanScale = 0.227451;
+					fanScale = 0.3843137;
 				}
 				tempPointer = reinterpret_cast<int32_t *>(&fanScale);
 			
@@ -2261,14 +2264,13 @@ bool Printer::preparationPreprocessor() {
 		temp << "G28" << endl;
 		temp << "M18" << endl;
 		temp << "M109 S" << to_string(filamentTemperature) << endl;
-		temp << "G4 S10" << endl;
+		temp << "G4 S2" << endl;
 		temp << "M17" << endl;
 		temp << "G91" << endl;
 		temp << "G0 E7.5 F2000" << endl;
 		temp << "G92 E0" << endl;
 		temp << "G90" << endl;
 		temp << "G0 Z0.4 F2400" << endl;
-		temp << "; can extrude" << endl;
 	
 		// Go through processed file
 		while(processedFile.peek() != EOF) {
@@ -2498,6 +2500,10 @@ bool Printer::waveBondingPreprocessor() {
 							if(gcode.hasValue('Y'))
 								extraGcode.setValue('Y', to_string(positionRelativeY - deltaY + tempRelativeY - relativeDifferenceY));
 							
+							// Set extra g-code F value if first element
+							if(gcode.hasValue('F') && i == 1)
+								extraGcode.setValue('F', gcode.getValue('F'));
+							
 							// Check if plane changed
 							if(changesPlane)
 							
@@ -2665,6 +2671,7 @@ bool Printer::thermalBondingPreprocessor() {
 					
 						// Check if previous command exists, the check sharp corner is set, and filament is ABS, HIPS, or PLA
 						if(!previousGcode.isEmpty() && checkSharpCorner && (filamentType == ABS || filamentType == HIPS || filamentType == PLA)) {
+						
 							// Check if both counters are less than or equal to one
 							if(cornerCounter <= 1 && layerCounter <= 1) {
 							
@@ -2872,7 +2879,7 @@ bool Printer::bedCompensationPreprocessor() {
 				if((firstLayer || !FIRST_LAYER_ONLY) && deltaE > 0) {
 				
 					// Go through all segments
-					for (uint32_t i = 1; i <= segmentCounter; i++) {
+					for(uint32_t i = 1; i <= segmentCounter; i++) {
 				
 						// Check if at last segment
 						if(i == segmentCounter) {
@@ -2928,6 +2935,12 @@ bool Printer::bedCompensationPreprocessor() {
 							
 								// Set extra g-code Y value
 								extraGcode.setValue('Y', to_string(positionRelativeY - deltaY + tempRelativeY - relativeDifferenceY));
+							
+							// Check if command has F value and in first element
+							if(gcode.hasValue('F') && i == 1)
+							
+								// Set extra g-code F value
+								extraGcode.setValue('F', gcode.getValue('F'));
 							
 							// Check if set to compensate Z and the plane changed
 							if(MOVE_Z_TO_COMPENSATE && changesPlane)
@@ -3132,6 +3145,10 @@ bool Printer::backlashCompensationPreprocessor() {
 						
 						// Set extra g-code X value
 						extraGcode.setValue('X', to_string(positionRelativeX + compensationX));
+						
+						// Set extra g-code Y value if using legacy
+						if(USE_LEGACY_BACKLASH)
+							extraGcode.setValue('Y', to_string(positionRelativeY + compensationY));
 					}
 					
 					// Check if Y direction has changed
@@ -3142,6 +3159,10 @@ bool Printer::backlashCompensationPreprocessor() {
 						
 						// Set extra g-code Y value
 						extraGcode.setValue('Y', to_string(positionRelativeY + compensationY));
+						
+						// Set extra g-code X value if using legacy
+						if(USE_LEGACY_BACKLASH)
+							extraGcode.setValue('X', to_string(positionRelativeX + compensationX));
 					}
 					
 					// Set extra g-code F value

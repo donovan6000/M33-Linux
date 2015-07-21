@@ -3,6 +3,10 @@ Copyright (c) 2015 donovan6000
 
 Changelog:
 
+V0.15 July 21, 2015
+
+	* Changed translator mode to require the third part software to handle confirmation, skips, and resends
+
 V0.14 July 20, 2015
 
 	* Printer values that are used by the pre-processor stages can be provided as parameters

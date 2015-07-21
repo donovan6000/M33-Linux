@@ -1159,6 +1159,7 @@ bool Printer::printFile(const char *file) {
 	uint8_t commandsSent = 0;
 	uint16_t lineNumber = 0;
 	uint64_t totalLines = 0, lineCounter = 0;
+	bool firstCommandSent = false;
 	
 	// Check if processing file failed
 	if(!processFile(file)) {
@@ -1194,13 +1195,17 @@ bool Printer::printFile(const char *file) {
 	while(processedFile.peek() != EOF || commandsSent != 0) {
 		
 		// Check if new g-code can be sent
-		if(processedFile.peek() != EOF && commandsSent <= 5) {
+		if(processedFile.peek() != EOF && commandsSent <= 3) {
 		
-			// Check if sending line number zero
-			if(!lineNumber)
+			// Check if first command hasn't been sent
+			if(!firstCommandSent) {
 		
-				// Set line to reset line number command
+				// Set command to starting line number
 				line = "M110";
+				
+				// Set first command sent
+				firstCommandSent = true;
+			}
 		
 			// Otherwise
 			else
@@ -1220,7 +1225,7 @@ bool Printer::printFile(const char *file) {
 		
 			// Set command's line number
 			gcode.setValue('N', to_string(lineNumber++));
-		
+			
 			// Send request
 			sendRequest(gcode);
 		
@@ -1240,8 +1245,8 @@ bool Printer::printFile(const char *file) {
 			// Get response
 			response = character + receiveResponse();
 			
-			// Check if response was a processed value
-			if(response.substr(0, 2) == "ok") {
+			// Check if response was a processed value or skip value
+			if((response.length() >= 4 && response.substr(0, 2) == "ok" && response[3] >= '0' && response[3] <= '9') || (response.length() >= 6 && response.substr(0, 4) == "skip")) {
 				
 				// Display message
 				cout << "Processed: " << buffer.front() << endl;
@@ -1256,8 +1261,8 @@ bool Printer::printFile(const char *file) {
 			}
 			
 			// Otherwise check if response was a resend value
-			else if(response.substr(0, 7) == "Resend:")
-				
+			else if(response.length() >= 8 && response.substr(0, 6) == "Resend")
+			
 				// Resend request
 				sendRequest(buffer.front());
 			
@@ -1390,8 +1395,8 @@ void Printer::translatorMode() {
 	char character;
 	string buffer;
 	ifstream file;
-	queue<string> commands;
 	Gcode gcode;
+	uint64_t numberWrapCounter = 0, lineNumber;
 	
 	// Check if creating virtual port failed
 	if((vd = posix_openpt(O_RDWR | O_NONBLOCK)) == -1)
@@ -1489,14 +1494,17 @@ void Printer::translatorMode() {
 			// Otherwise
 			else {
 			
-				// Check if data contains a line number
-				if(gcode.parseLine(buffer) && gcode.hasValue('N')) {
+				// Check if data contains valid g-code
+				if(gcode.parseLine(buffer)) {
 				
 					// Set buffer to value
 					buffer = gcode.getAscii();
 					
-					// Add request to queue
-					commands.push(buffer);
+					// Check if data contains a starting line number
+					if(gcode.getValue('N') == "0" && gcode.getValue('M') == "110")
+					
+						// Reset number wrap counter
+						numberWrapCounter = 0;
 				}
 				
 				// Send request to the printer
@@ -1514,30 +1522,44 @@ void Printer::translatorMode() {
 			} while(read(fd, &character, 1) == 1);
 			
 			// Check if response was a processed value
-			if(buffer.length() >= 4 && buffer.substr(0, 3) == "ok " && buffer[3] >= '0' && buffer[3] <= '9') {
+			if(buffer.length() >= 4 && buffer.substr(0, 2) == "ok" && buffer[3] >= '0' && buffer[3] <= '9') {
+			
+				// Get line number
+				lineNumber = stoi(buffer.substr(3));
 			
 				// Set buffer to contain correct line number
-				buffer = "ok " + commands.front().substr(1, commands.front().find(' ') - 1) + '\n';
-			
-				// Remove command from queue
-				commands.pop();
-			}
-			
-			// Check if response was a resend value
-			if(buffer.substr(0, 7) == "Resend:")
+				buffer = "ok " + to_string(lineNumber + numberWrapCounter * 0x10000) + '\n';
 				
-				// Resend request
-				sendRequest(commands.front());
-			
-			// Otherwise
-			else {
-			
-				// Send response from printer
-				tcflush(vd, TCIOFLUSH);
-				if(write(vd, buffer.c_str(), buffer.size()) != static_cast<unsigned int>(buffer.size()))
-					return;
-				tcdrain(vd);
+				// Increment number wrap counter if applicable
+				if(lineNumber == UINT16_MAX)
+					numberWrapCounter++;
 			}
+			
+			// Otherwise check if response was a skip value
+			else if(buffer.length() >= 6 && buffer.substr(0, 4) == "skip") {
+			
+				// Get line number
+				lineNumber = stoi(buffer.substr(5));
+			
+				// Set buffer to contain correct line number
+				buffer = "ok " + to_string(lineNumber + numberWrapCounter * 0x10000) + '\n';
+				
+				// Increment number wrap counter if applicable
+				if(lineNumber == UINT16_MAX)
+					numberWrapCounter++;
+			}
+			
+			// Otherwise check if response was a resend value
+			else if(buffer.length() >= 8 && buffer.substr(0, 6) == "Resend")
+			
+				// Set buffer to contain correct line number
+				buffer = "Resend:" + to_string(stoi(buffer.substr(7)) + numberWrapCounter * 0x10000) + '\n';
+			
+			// Send response from printer
+			tcflush(vd, TCIOFLUSH);
+			if(write(vd, buffer.c_str(), buffer.size()) != static_cast<unsigned int>(buffer.size()))
+				return;
+			tcdrain(vd);
 		}
 		
 		// Wait
@@ -1915,7 +1937,7 @@ bool Printer::getPrintInformation() {
 	Gcode gcode;
 	fstream file(workingFolderLocation + "/output.gcode", ios::in | ios::binary);
 	double localX = 54, localY = 60, localZ = 0, localE = 0, commandX, commandY, commandZ, commandE, commandF;
-	bool relativeMode = true, positiveExtrusion;
+	bool relativeMode = false, positiveExtrusion;
 	printTiers tier = LOW;
 	
 	// Reset all print values
@@ -2044,6 +2066,7 @@ bool Printer::getPrintInformation() {
 						
 						// Return false if X or Y are out of bounds				
 						switch(tier) {
+						
 							case LOW:
 							
 								if(localX < BED_LOW_MIN_X || localX > BED_LOW_MAX_X || localY < BED_LOW_MIN_Y || localY > BED_LOW_MAX_Y)
@@ -2337,7 +2360,7 @@ bool Printer::waveBondingPreprocessor() {
 	Gcode gcode, previousGcode, refrenceGcode, tackPoint, extraGcode;
 	fstream processedFile(workingFolderLocation + "/output.gcode", ios::in | ios::binary);
 	fstream temp(workingFolderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
-	bool relativeMode = true;
+	bool relativeMode = false;
 	bool firstLayer = true, changesPlane = false;
 	uint32_t cornerCounter = 0, layerNumber, baseLayer = 0, waveRatio;
 	double distance;
@@ -2612,7 +2635,7 @@ bool Printer::thermalBondingPreprocessor() {
 	fstream temp(workingFolderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
 	int layerCounter = 0, cornerCounter = 0;
 	bool checkSharpCorner = false;
-	bool relativeMode = true;
+	bool relativeMode = false;
 	
 	// Check if temp file was opened successfully
 	if(processedFile.good() && temp.good()) {
@@ -2768,7 +2791,7 @@ bool Printer::bedCompensationPreprocessor() {
 	Gcode gcode, extraGcode;
 	fstream processedFile(workingFolderLocation + "/output.gcode", ios::in | ios::binary);
 	fstream temp(workingFolderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
-	bool relativeMode = true;
+	bool relativeMode = false;
 	bool changesPlane = false;
 	bool hasExtruded = false;
 	bool firstLayer = false;
@@ -3095,7 +3118,7 @@ bool Printer::backlashCompensationPreprocessor() {
 	Gcode gcode, extraGcode;
 	fstream processedFile(workingFolderLocation + "/output.gcode", ios::in | ios::binary);
 	fstream temp(workingFolderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
-	bool relativeMode = true;
+	bool relativeMode = false;
 	string valueF = "1000";
 	directions directionX, directionY, previousDirectionX = NEITHER, previousDirectionY = NEITHER;
 	double compensationX = 0, compensationY = 0;

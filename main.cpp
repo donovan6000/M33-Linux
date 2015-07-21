@@ -29,7 +29,7 @@ int main(int argc, char *argv[]) {
 	signal(SIGINT, breakHandler);
 	
 	// Display version
-	cout << "M3D Linux V0.14" << endl << endl;
+	cout << "M3D Linux V0.15" << endl << endl;
 	
 	// Go through all commands
 	for(uint8_t i = 0; i < argc; i++) {
@@ -38,7 +38,7 @@ int main(int argc, char *argv[]) {
 		if(!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
 		
 			// Display help
-			cout << "Usage: m3d-linux -v -p -w -t -b -l -f -r firmware.rom -c -i input.gcode -s -o output.gcode -e" << endl;
+			cout << "Usage: m3d-linux -v -p -w -t -b -l -f -r firmware.rom -c -i input.gcode -s -o output.gcode -e -d" << endl;
 			cout << "-v | --validation: Use validation pre-processor" << endl;
 			cout << "-p | --preparation: Use preparation pre-processor" << endl;
 			cout << "-w | --wavebonding: Use wave bonding pre-processor" << endl;
@@ -509,20 +509,20 @@ int main(int argc, char *argv[]) {
 				return 0;
 			}
 		}
+		
+		// Check if printer'a firmware is incompatible
+		if(!printer.getFirmwareVersion().empty() && stoi(printer.getFirmwareVersion()) < 2015071301) {
+
+			// Display error
+			cout << "Printer's firmware is incompatible" << endl;
+			return 0;
+		}
 
 		// Check if collect printer information failed
 		if(!printer.collectInformation()) {
 
 			// Display error
 			cout << "Failed to collect printer information" << endl;
-			return 0;
-		}
-
-		// Check if printer'a firmware is incompatible
-		if(stoi(printer.getFirmwareVersion()) < 2015071301) {
-
-			// Display error
-			cout << "Printer's firmware is incompatible" << endl;
 			return 0;
 		}
 

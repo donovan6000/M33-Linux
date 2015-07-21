@@ -1,5 +1,6 @@
 // Header files
 #include <cstring>
+#include <cmath>
 #include "gcode.h"
 
 
@@ -423,7 +424,7 @@ vector<uint8_t> Gcode::getBinary() const {
 		if(dataType & (1 << 10) && !parameterValue[9].empty()) {
 			
 			// Set 4 byte integer parameter value
-			tempNumber = stoi(parameterValue[9]);
+			tempNumber = static_cast<int>(round(stod(parameterValue[9])));
 			request.push_back(tempNumber & 0xFF);
 			request.push_back((tempNumber >> 8) & 0xFF);
 			request.push_back((tempNumber >> 16) & 0xFF);
@@ -434,7 +435,7 @@ vector<uint8_t> Gcode::getBinary() const {
 		if(dataType & (1 << 11) && !parameterValue[10].empty()) {
 			
 			// Set 4 byte integer parameter value
-			tempNumber = stoi(parameterValue[10]);
+			tempNumber = static_cast<int>(round(stod(parameterValue[10])));
 			request.push_back(tempNumber & 0xFF);
 			request.push_back((tempNumber >> 8) & 0xFF);
 			request.push_back((tempNumber >> 16) & 0xFF);

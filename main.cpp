@@ -58,6 +58,7 @@ int main(int argc, char *argv[]) {
 			cout << "--backlashSpeed: Provide backlash Speed" << endl;
 			cout << "--filamentTemperature: Provide filament temperature" << endl;
 			cout << "--filamentType: Provide filament type" << endl;
+			cout << "--bedHeightOffset: Provide bed height offset" << endl;
 			cout << "--backRightOffset: Provide back right offset" << endl;
 			cout << "--backLeftOffset: Provide back left offset" << endl;
 			cout << "--frontLeftOffset: Provide front left offset" << endl;
@@ -263,7 +264,7 @@ int main(int argc, char *argv[]) {
 			// Check if filament temperature parameter exists
 			if(i < argc - 1)
 			
-				// Set filament type
+				// Set filament temperature
 				printer.setFilamentTemperature(argv[++i]);
 			
 			// Otherwise
@@ -275,13 +276,31 @@ int main(int argc, char *argv[]) {
 			}
 		}
 		
+		// Otherwise check if a bed height offset is provided
+		else if(!strcmp(argv[i], "--bedHeightOffset")) {
+		
+			// Check if bed height offset parameter exists
+			if(i < argc - 1)
+			
+				// Set bed height offset
+				printer.setBedHeightOffset(argv[++i]);
+			
+			// Otherwise
+			else {
+			
+				// Display error
+				cout << "No bed height offset provided" << endl;
+				return 0;
+			}
+		}
+		
 		// Otherwise check if a back right offset is provided
 		else if(!strcmp(argv[i], "--backRightOffset")) {
 		
 			// Check if back right offset parameter exists
 			if(i < argc - 1)
 			
-				// Set filament type
+				// Set back right offset
 				printer.setBackRightOffset(argv[++i]);
 			
 			// Otherwise
@@ -299,7 +318,7 @@ int main(int argc, char *argv[]) {
 			// Check if back left offset parameter exists
 			if(i < argc - 1)
 			
-				// Set filament type
+				// Set back left offset
 				printer.setBackLeftOffset(argv[++i]);
 			
 			// Otherwise
@@ -317,7 +336,7 @@ int main(int argc, char *argv[]) {
 			// Check if front left offset parameter exists
 			if(i < argc - 1)
 			
-				// Set filament type
+				// Set front left offset
 				printer.setFrontLeftOffset(argv[++i]);
 			
 			// Otherwise
@@ -335,7 +354,7 @@ int main(int argc, char *argv[]) {
 			// Check if front right offset parameter exists
 			if(i < argc - 1)
 			
-				// Set filament type
+				// Set front right offset
 				printer.setFrontRightOffset(argv[++i]);
 			
 			// Otherwise

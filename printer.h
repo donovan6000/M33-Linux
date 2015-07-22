@@ -164,6 +164,7 @@ class Printer {
 		void setBacklashX(const string &value);
 		void setBacklashY(const string &value);
 		void setBacklashSpeed(const string &value);
+		void setBedHeightOffset(const string &value);
 		void setBackRightOffset(const string &value);
 		void setBackLeftOffset(const string &value);
 		void setFrontLeftOffset(const string &value);

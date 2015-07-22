@@ -48,7 +48,7 @@
 #define CHIP_TOTAL_MEMORY CHIP_NUMBER_OF_PAGES * CHIP_PAGE_SIZE * 2
 
 // Wave bonding settings
-#define WAVE_PERIOD 5
+#define WAVE_PERIOD 5L
 #define WAVE_PERIOD_QUARTER WAVE_PERIOD / 4L
 #define WAVE_SIZE 0.15L
 
@@ -1344,6 +1344,12 @@ void Printer::setBacklashSpeed(const string &value) {
 	backlashSpeed = stod(value);
 }
 
+void Printer::setBedHeightOffset(const string &value) {
+
+	// Set bed height offset
+	bedHeightOffset = stod(value);
+}
+
 void Printer::setBackRightOffset(const string &value) {
 
 	// Set back right offset
@@ -1945,7 +1951,7 @@ bool Printer::getPrintInformation() {
 	maxXModel = 0, maxYModel = 0, maxZModel = 0;
 	minXExtruder = DBL_MAX, minYExtruder = DBL_MAX, minZExtruder = DBL_MAX;
 	maxXExtruder = 0, maxYExtruder = 0, maxZExtruder = 0;
-	minFeedRate = 0, maxFeedRate = DBL_MAX;
+	maxFeedRate = 0, minFeedRate = DBL_MAX;
 	
 	// Check if file was opened successfully
 	if(file.good()) {
@@ -2056,7 +2062,7 @@ bool Printer::getPrintInformation() {
 							if(localZ >= BED_LOW_MIN_Z && localZ < BED_LOW_MAX_Z)
 								tier = LOW;
 								
-							else if(localZ >= BED_LOW_MIN_Z && localZ < BED_MEDIUM_MAX_Z)
+							else if(localZ >= BED_MEDIUM_MIN_Z && localZ < BED_MEDIUM_MAX_Z)
 								tier = MEDIUM;
 								
 							else if(localZ >= BED_HIGH_MIN_Z && localZ <= BED_HIGH_MAX_Z)
@@ -2175,13 +2181,17 @@ Gcode Printer::createTackPoint(const Gcode &point, const Gcode &refrence) {
 bool Printer::isSharpCorner(const Gcode &point, const Gcode &refrence) {
 
 	// Initialize variables
+	double value;
 	double currentX = point.hasValue('X') ? stod(point.getValue('X')) : 0;
 	double currentY = point.hasValue('Y') ? stod(point.getValue('Y')) : 0;
 	double previousX = refrence.hasValue('X') ? stod(refrence.getValue('X')) : 0;
 	double previousY = refrence.hasValue('Y') ? stod(refrence.getValue('Y')) : 0;
 	
 	// Calculate value
-	double value = acos((currentX * previousX + currentY * previousY) / (pow(currentX * currentX + currentY * currentY, 2) * pow(previousX * previousX + previousY * previousY, 2)));
+	if((!currentX && !currentY) || (!previousX && !previousY))
+		value = acos(0);
+	else
+		value = acos((currentX * previousX + currentY * previousY) / (pow(currentX * currentX + currentY * currentY, 2) * pow(previousX * previousX + previousY * previousY, 2)));
 	
 	// Return if sharp corner
 	return value > 0 && value < M_PI_2;
@@ -2362,7 +2372,8 @@ bool Printer::waveBondingPreprocessor() {
 	fstream temp(workingFolderLocation + "/temp", ios::out | ios::in | ios::binary | ios::app);
 	bool relativeMode = false;
 	bool firstLayer = true, changesPlane = false;
-	uint32_t cornerCounter = 0, layerNumber, baseLayer = 0, waveRatio;
+	int64_t layerNumber, baseLayer = 0;
+	uint32_t cornerCounter = 0, waveRatio;
 	double distance;
 	double positionAbsoluteX = 0, positionAbsoluteY = 0, positionAbsoluteZ = 0, positionAbsoluteE = 0;
 	double positionRelativeX = 0, positionRelativeY = 0, positionRelativeZ = 0, positionRelativeE = 0;
@@ -2438,10 +2449,18 @@ bool Printer::waveBondingPreprocessor() {
 				relativeDifferenceE = positionRelativeE - deltaE;
 				
 				// Set delta ratios
-				deltaRatioX = deltaX / distance;
-				deltaRatioY = deltaY / distance;
-				deltaRatioZ = deltaZ / distance;
-				deltaRatioE = deltaE / distance;
+				if(distance) {
+					deltaRatioX = deltaX / distance;
+					deltaRatioY = deltaY / distance;
+					deltaRatioZ = deltaZ / distance;
+					deltaRatioE = deltaE / distance;
+				}
+				else {
+					deltaRatioX = 0;
+					deltaRatioY = 0;
+					deltaRatioZ = 0;
+					deltaRatioE = 0;
+				}
 				
 				// Check if in first dayer and delta E is greater than zero 
 				if(firstLayer && deltaE > 0) {
@@ -2452,7 +2471,7 @@ bool Printer::waveBondingPreprocessor() {
 						// Check if corner count is at most one and sharp corner
 						if(cornerCounter <= 1 && isSharpCorner(gcode, previousGcode)) {
 						
-							// Check if refrence g-codes is set
+							// Check if refrence g-codes isn't set
 							if(refrenceGcode.isEmpty()) {
 							
 								// Check if a tack point was created
@@ -2541,6 +2560,7 @@ bool Printer::waveBondingPreprocessor() {
 								
 							// Set extra g-code E value
 							extraGcode.setValue('E', to_string(positionRelativeE - deltaE + tempRelativeE - relativeDifferenceE));
+							
 							// Send extra g-code to temp
 							temp << extraGcode << endl;
 						}
@@ -2701,7 +2721,7 @@ bool Printer::thermalBondingPreprocessor() {
 								// Check if sharp corner
 								if(isSharpCorner(gcode, previousGcode)) {
 								
-									// Check if refrence g-codes is set
+									// Check if refrence g-codes isn't set
 									if(refrenceGcode.isEmpty()) {
 									
 										// Check if a tack point was created
@@ -2718,7 +2738,6 @@ bool Printer::thermalBondingPreprocessor() {
 									// Increment corner count
 									cornerCounter++;
 								}
-						
 							}
 							
 							// Otherwise check if corner counter is greater than one but layer counter isn't and sharp corner
@@ -2730,7 +2749,6 @@ bool Printer::thermalBondingPreprocessor() {
 								
 									// Send tack point to temp
 									temp << tackPoint << endl;
-								
 								
 								// Set refrence g-code
 								refrenceGcode = gcode;
@@ -2819,7 +2837,7 @@ bool Printer::bedCompensationPreprocessor() {
 			if(gcode.parseLine(line) && gcode.hasValue('G') && (gcode.getValue('G') == "0" || gcode.getValue('G') == "1") && !relativeMode) {
 			
 				// Check if command has an X or Y value
-				if(gcode.hasValue('X') || gcode.hasValue('X'))
+				if(gcode.hasValue('X') || gcode.hasValue('Y'))
 				
 					// Set changes plane
 					changesPlane = true;
@@ -2871,15 +2889,23 @@ bool Printer::bedCompensationPreprocessor() {
 				relativeDifferenceE = positionRelativeE - deltaE;
 				
 				// Set delta ratios
-				deltaRatioX = deltaX / distance;
-				deltaRatioY = deltaY / distance;
-				deltaRatioZ = deltaZ / distance;
-				deltaRatioE = deltaE / distance;
+				if(distance) {
+					deltaRatioX = deltaX / distance;
+					deltaRatioY = deltaY / distance;
+					deltaRatioZ = deltaZ / distance;
+					deltaRatioE = deltaE / distance;
+				}
+				else {
+					deltaRatioX = 0;
+					deltaRatioY = 0;
+					deltaRatioZ = 0;
+					deltaRatioE = 0;
+				}
 				
 				// Check if change in E is greater than 0
 				if(deltaE > 0) {
 				
-					// Set
+					// Set add command
 					addCommand = !hasExtruded;
 					
 					// Set has extruded

@@ -48,28 +48,28 @@
 #define CHIP_TOTAL_MEMORY CHIP_NUMBER_OF_PAGES * CHIP_PAGE_SIZE * 2
 
 // Wave bonding settings
-#define WAVE_PERIOD 5L
-#define WAVE_PERIOD_QUARTER WAVE_PERIOD / 4L
-#define WAVE_SIZE 0.15L
+#define WAVE_PERIOD 5.0
+#define WAVE_PERIOD_QUARTER (WAVE_PERIOD / 4.0)
+#define WAVE_SIZE 0.15
 
 // Thermal and wave bonding settings
-#define BONDING_HEIGHT_OFFSET -0.1L
+#define BONDING_HEIGHT_OFFSET -0.1
 
 // Backlash compensation settings
 #define USE_LEGACY_BACKLASH false
 
 // Bed compensation settings
-#define CHANGE_IN_HEIGHT_THAT_DOUBLES_EXTRUSION 0.15L
+#define CHANGE_IN_HEIGHT_THAT_DOUBLES_EXTRUSION 0.15
 #define CHANGE_EXTRUSION_TO_COMPENSATE false
 #define FIRST_LAYER_ONLY false
-#define LEVELLING_MOVE_X 104.9L
-#define LEVELLING_MOVE_Y 103L
+#define LEVELLING_MOVE_X 104.9
+#define LEVELLING_MOVE_Y 103.0
 #define MOVE_Z_TO_COMPENSATE true
-#define PROBE_Z_DISTANCE 55L
-#define SEGMENT_LENGTH 2L
+#define PROBE_Z_DISTANCE 55.0
+#define SEGMENT_LENGTH 2.0
 
 // Feed rate conversion settings
-#define MAX_FEED_RATE 60.0001L
+#define MAX_FEED_RATE 60.0001
 
 // Fan types
 enum fanTypes {HENGLIXIN = 0x01, LISTENER = 0x02, SHENZHEW = 0x03, NO_FAN = 0xFF};
@@ -1942,7 +1942,7 @@ bool Printer::getPrintInformation() {
 	string line;
 	Gcode gcode;
 	fstream file(workingFolderLocation + "/output.gcode", ios::in | ios::binary);
-	double localX = 54, localY = 60, localZ = 0, localE = 0, commandX, commandY, commandZ, commandE, commandF;
+	double localX = 54, localY = 60, localZ = 1, localE = 0, commandX, commandY, commandZ, commandE, commandF;
 	bool relativeMode = false, positiveExtrusion;
 	printTiers tier = LOW;
 	
@@ -2212,14 +2212,14 @@ double Printer::getCurrentAdjustmentZ() {
 	return adjustment * WAVE_SIZE;
 }
 
-double Printer::getHeightAdjustmentRequired(double x, double y) {
+double Printer::getHeightAdjustmentRequired(double valueX, double valueY) {
 
 	// Initialize variables
 	double left = (backLeftOffset - frontLeftOffset) / LEVELLING_MOVE_Y;
 	double right = (backRightOffset - frontRightOffset) / LEVELLING_MOVE_Y;
 	
 	// Return height adjustment
-	return (right * y + frontRightOffset - (left * y + frontLeftOffset)) / LEVELLING_MOVE_X * x + (left * y + frontLeftOffset);
+	return (right * valueY + frontRightOffset - (left * valueY + frontLeftOffset)) / LEVELLING_MOVE_X * valueX + (left * valueY + frontLeftOffset);
 }
 
 bool Printer::validationPreprocessor() {
@@ -3226,16 +3226,16 @@ bool Printer::backlashCompensationPreprocessor() {
 			
 				// Check if command has an X value
 				if(gcode.hasValue('X'))
-			
+				
 					// Add to command's X value
 					gcode.setValue('X', to_string(stod(gcode.getValue('X')) + compensationX));
-			
+				
 				// Check if command has a Y value
 				if(gcode.hasValue('Y'))
-			
+				
 					// Add to command's Y value
 					gcode.setValue('Y', to_string(stod(gcode.getValue('Y')) + compensationY));
-			
+				
 				// Set relative values
 				positionRelativeX += deltaX;
 				positionRelativeY += deltaY;

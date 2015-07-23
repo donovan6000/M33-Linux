@@ -17,8 +17,8 @@ using namespace std;
 #define BED_LOW_MIN_X 0.05
 #define BED_LOW_MAX_Y 106.95
 #define BED_LOW_MIN_Y 0.05
-#define BED_LOW_MAX_Z 5
-#define BED_LOW_MIN_Z 0
+#define BED_LOW_MAX_Z 5.0
+#define BED_LOW_MIN_Z 0.0
 #define BED_MEDIUM_MAX_X 110.15
 #define BED_MEDIUM_MIN_X 2.85
 #define BED_MEDIUM_MAX_Y 106.95

@@ -4,7 +4,7 @@
 A Linux program that can communicate with the Micro M3D printer
 <br>
 <br>
-You can download the latest executable <a href="https://www.exploitkings.com/public/m3d-linux-V0.15.zip">here</a> or the deb package <a href="https://www.exploitkings.com/public/m3d-linux-V0.15.deb">here</a>.
+You can download the latest executable <a href="https://www.exploitkings.com/public/m3d-linux-V0.16.zip">here</a> or the deb package <a href="https://www.exploitkings.com/public/m3d-linux-V0.16.deb">here</a>.
 <br>
 <br>
 The parameters that can be provided when running this program are as follows:

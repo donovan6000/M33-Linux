@@ -1,6 +1,6 @@
 PROG = m3d-linux
 CC = g++
-SRCS = main.cpp gcode.cpp printer.cpp
+SRCS = main.cpp gcode.cpp printer.cpp vector.cpp
 CFLAGS = -Wall -std=c++14 -O3
 
 all: $(PROG)

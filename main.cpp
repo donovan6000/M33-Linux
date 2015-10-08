@@ -23,13 +23,13 @@ int main(int argc, char *argv[]) {
 	// Initialize variables
 	string response, line, firmwareRom, inputFile, outputFile;
 	ifstream file;
-	bool translate = false, forceFlash = false, settings = false, provided = false;
+	bool translate = false, forceFlash = false, settings = false, provided = false, exit = false;
 	
 	// Attach break handler
 	signal(SIGINT, breakHandler);
 	
 	// Display version
-	cout << "M3D Linux V0.15" << endl << endl;
+	cout << "M3D Linux V0.16" << endl << endl;
 	
 	// Go through all commands
 	for(uint8_t i = 0; i < argc; i++) {
@@ -38,7 +38,7 @@ int main(int argc, char *argv[]) {
 		if(!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
 		
 			// Display help
-			cout << "Usage: m3d-linux -v -p -w -t -b -l -f -r firmware.rom -c -i input.gcode -s -o output.gcode -e -d" << endl;
+			cout << "Usage: m3d-linux -v -c -p -w -t -b -l -f -x -r firmware.rom -a -i input.gcode -s -o output.gcode -e -d" << endl;
 			cout << "-v | --validation: Use validation pre-processor" << endl;
 			cout << "-p | --preparation: Use preparation pre-processor" << endl;
 			cout << "-w | --wavebonding: Use wave bonding pre-processor" << endl;
@@ -46,8 +46,10 @@ int main(int argc, char *argv[]) {
 			cout << "-b | --bedcompensation: Use bed compensation pre-processor" << endl;
 			cout << "-l | --backlashcompensation: Use backlash compensation pre-processor" << endl;
 			cout << "-f | --feedrateconversion: Use feed rate conversion pre-processor" << endl;
+			cout << "-c | --centermodel: Use center model pre-processor" << endl;
 			cout << "-r | --firmwarerom: Use the following parameter as the firmware ROM in case firmware is corrupt or outdated" << endl;
-			cout << "-c | --forceflash: Forces the firmware to update to the provided ROM" << endl;
+			cout << "-x | --exit: Switches printer into firmware mode and exits if firmware is updated" << endl;
+			cout << "-a | --forceflash: Forces the firmware to update to the provided ROM" << endl;
 			cout << "-i | --inputfile: Use the following parameter as the G-code file to processes and send to the printer. G-code commands can be manually entered if no G-code file is not provided." << endl;
 			cout << "-s | --translate: Uses the program as a middle man to communicate between the printer and other software" << endl;
 			cout << "-o | --outputfile: Use the following parameter as the G-code file to output after the input file has been processed by all the desired pre-processor stages." << endl;
@@ -55,7 +57,7 @@ int main(int argc, char *argv[]) {
 			cout << "-d | --provided: Uses provided values instead of obtaining them from the printer" << endl;
 			cout << "--backlashX: Provide backlash X" << endl;
 			cout << "--backlashY: Provide backlash Y" << endl;
-			cout << "--backlashSpeed: Provide backlash Speed" << endl;
+			cout << "--backlashSpeed: Provide backlash speed" << endl;
 			cout << "--filamentTemperature: Provide filament temperature" << endl;
 			cout << "--filamentType: Provide filament type" << endl;
 			cout << "--bedHeightOffset: Provide bed height offset" << endl;
@@ -108,6 +110,12 @@ int main(int argc, char *argv[]) {
 			// Set feed rate conversion preprocessor
 			printer.setFeedRateConversionPreprocessor();
 		
+		// Otherwise check if using center model pre-processor
+		else if(!strcmp(argv[i], "-c") || !strcmp(argv[i], "--centermodel"))
+		
+			// Set center model preprocessor
+			printer.setCenterModelPreprocessor();
+		
 		// Otherwise check if a firmware rom is provided
 		else if(!strcmp(argv[i], "-r") || !strcmp(argv[i], "--firmwarerom")) {
 		
@@ -127,10 +135,16 @@ int main(int argc, char *argv[]) {
 		}
 		
 		// Otherwise check if using force flash
-		else if(!strcmp(argv[i], "-c") || !strcmp(argv[i], "--forceflash"))
+		else if(!strcmp(argv[i], "-a") || !strcmp(argv[i], "--forceflash"))
 		
 			// Set force flash
 			forceFlash = true;
+		
+		// Otherwise check if using exiting after flash
+		else if(!strcmp(argv[i], "-x") || !strcmp(argv[i], "--exit"))
+		
+			// Set exit
+			exit = true;
 		
 		// Otherwise check if an input file is provided
 		else if(!strcmp(argv[i], "-i") || !strcmp(argv[i], "--inputfile")) {
@@ -431,7 +445,7 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 	
-	// Check if force flahs without a rom
+	// Check if force flash without a rom
 	if(forceFlash && firmwareRom.empty()) {
 	
 		// Display error
@@ -484,7 +498,7 @@ int main(int argc, char *argv[]) {
 
 			// Enter bootloader mode
 			printer.sendRequest("M115 S628");
-
+		
 		// Check if printer's firmware isn't valid
 		if(!printer.isFirmwareValid() || forceFlash) {
 
@@ -503,6 +517,15 @@ int main(int argc, char *argv[]) {
 	
 					// Display error
 					cout << "Failed to update firmware" << endl;
+					return 0;
+				}
+				
+				// Display message
+				cout << "Done updating firmware" << endl;
+				
+				// Put printer into firmware mode and exit if set
+				if(exit) {
+					printer.sendRequest("Q");
 					return 0;
 				}
 			}
@@ -527,10 +550,19 @@ int main(int argc, char *argv[]) {
 				cout << "Failed to update firmware" << endl;
 				return 0;
 			}
+			
+			// Display message
+			cout << "Done updating firmware" << endl;
+			
+			// Put printer into firmware mode and exit if set
+			if(exit) {
+				printer.sendRequest("Q");
+				return 0;
+			}
 		}
 		
 		// Check if printer'a firmware is incompatible
-		if(!printer.getFirmwareVersion().empty() && stoi(printer.getFirmwareVersion()) < 2015071301) {
+		if(!printer.getFirmwareVersion().empty() && stoi(printer.getFirmwareVersion()) < 2015080602) {
 
 			// Display error
 			cout << "Printer's firmware is incompatible" << endl;

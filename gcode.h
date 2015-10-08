@@ -4,13 +4,13 @@
 
 
 // Header files
-#include <string>
+#include <iostream>
 #include <vector>
 
 using namespace std;
 
 
-// Class
+// Gcode class
 class Gcode {
 
 	// Public
@@ -23,80 +23,92 @@ class Gcode {
 		Gcode();
 		
 		/*
-		Name: Copy Constructor
+		Name: Copy constructor
 		Purpose: Initializes the variable if copied
 		*/
 		Gcode(Gcode &value);
 		
 		/*
-		Name: Parse Line
+		Name: Parse line
 		Purpose: Extracts G-code from the parameter
 		*/
 		bool parseLine(const char *line);
 		bool parseLine(const string &line);
 		
 		/*
-		Name: Get Binary
+		Name: Parse binary
+		Purpose: Extracts G-code from the binary parameter
+		*/
+		bool parseBinary(const char *line);
+		
+		/*
+		Name: Get original command
+		Purpose: Returns the orignal G-code command
+		*/
+		string getOriginalCommand() const;
+		
+		/*
+		Name: Get binary
 		Purpose: Returns binary representation of the G-code
 		*/
 		vector<uint8_t> getBinary() const;
 		
 		/*
-		Name: Get Ascii
+		Name: Get ascii
 		Purpose: Returns Ascii representation of the G-code
 		*/
 		string getAscii() const;
 		
 		/*
-		Name: Get Data Type
+		Name: Get data type
 		Purpose: Returns the data type of the G-code
 		*/
 		uint32_t getDataType() const;
 		
 		/*
-		Name: Has Parameter
-		Purpose: Checks if the G-code has a specific identifier, but does not check if it has a value associated with it
+		Name: Has parameter
+		Purpose: Checks if the G-code has a specific parameter, but does not check if it has a value associated with it
 		*/
-		bool hasParameter(char identifier) const;
+		bool hasParameter(char parameter) const;
 		
 		/*
-		Name: Remove Parameter
+		Name: Remove parameter
 		Purpose: Removes a specified parameter from the G-cocdde
 		*/
-		void removeParameter(char identifier);
+		void removeParameter(char parameter);
 		
 		/*
-		Name: Has Value
-		Purpose: Checks if the G-code has a value associated with a specific identifier, so it can't detect flags
+		Name: Has value
+		Purpose: Checks if the G-code has a value associated with a specific parameter, so it can't detect flags
 		*/
-		bool hasValue(char identifier) const;
+		bool hasValue(char parameter) const;
 		
 		/*
-		Name: Get Value
-		Purpose: Retuns the value associated with a specific identifier
+		Name: Get value
+		Purpose: Retuns the value associated with a specific parameter
 		*/
-		string getValue(char identifier) const;
+		string getValue(char parameter) const;
 		
 		/*
-		Name: Set Value
-		Purpose: Sets the value associated with a specific identifier
+		Name: Set value
+		Purpose: Sets the value associated with a specific parameter
 		*/
-		void setValue(char identifier, const string &value);
+		void setValue(char parameter, const string &value);
 		
 		/*
-		Name: Has String
+		Name: Has string
 		Purpose: Returns if the G-code contained a string as a value for a parameter
 		*/
 		bool hasString() const;
 		
 		/*
-		Name: Get String
+		Name: Get string
 		Purpose: Returns the string value associated with a parameter
 		*/
 		string getString() const;
 		
 		/*
-		Name: Set String
+		Name: Set string
 		Purpose: Sets the string value associated with a parameter
 		*/
 		void setString(const string &value);
@@ -108,31 +120,25 @@ class Gcode {
 		void clear();
 		
 		/*
-		Name: Is Parsed
-		Purpose: Returns if any G-code has been successfully parsed yet
-		*/
-		bool isParsed() const;
-		
-		/*
-		Name: Is Host Command
+		Name: Is host command
 		Purpose: Returns if the G-code is a host command
 		*/
 		bool isHostCommand() const;
 		
 		/*
-		Name: Is Empty
+		Name: Is empty
 		Purpose: Returns if no G-code has attempted to be parsed yet
 		*/
 		bool isEmpty() const;
 		
 		/*
-		Name: Assignment Operator
+		Name: Assignment operator
 		Purpose: Allows using the assignment operator
 		*/
 		Gcode &operator=(const Gcode &value);
 		
 		/*
-		Name: Output Stream Operator
+		Name: Output stream operator
 		Purpose: Allows using the output stream operator
 		*/
 		friend ostream &operator<<(ostream &output, const Gcode &value);
@@ -143,7 +149,7 @@ class Gcode {
 		// Original command
 		string originalCommand;
 	
-		// Parameters
+		// Parameter values
 		vector<string> parameterValue;
 		
 		// Data type
@@ -151,12 +157,7 @@ class Gcode {
 		
 		// Host command
 		string hostCommand;
-		
-		// Parsed
-		bool parsed;
-		
-		// Empty
-		bool empty;
 };
+
 
 #endif

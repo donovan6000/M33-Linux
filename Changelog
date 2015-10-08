@@ -3,6 +3,12 @@ Copyright (c) 2015 donovan6000
 
 Changelog:
 
+V0.16 October 8, 2015
+
+	* Added center model pre-processor
+	* Updated all pre-processors to match those in the official software
+	* Added ability to flash unencrypted firmware ROMs
+
 V0.15 July 21, 2015
 
 	* Changed translator mode to require the third part software to handle confirmation, skips, and resends

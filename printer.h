@@ -6,6 +6,7 @@
 // Header files
 #include <string>
 #include "gcode.h"
+#include "vector.h"
 
 using namespace std;
 
@@ -13,23 +14,23 @@ using namespace std;
 // Definitions
 
 // Printer bed size limits
-#define BED_LOW_MAX_X 112.95
-#define BED_LOW_MIN_X 0.05
-#define BED_LOW_MAX_Y 106.95
-#define BED_LOW_MIN_Y 0.05
+#define BED_LOW_MAX_X 113.0
+#define BED_LOW_MIN_X 0.0
+#define BED_LOW_MAX_Y 107.0
+#define BED_LOW_MIN_Y 0.0
 #define BED_LOW_MAX_Z 5.0
 #define BED_LOW_MIN_Z 0.0
-#define BED_MEDIUM_MAX_X 110.15
-#define BED_MEDIUM_MIN_X 2.85
-#define BED_MEDIUM_MAX_Y 106.95
-#define BED_MEDIUM_MIN_Y -6.55
+#define BED_MEDIUM_MAX_X 110.2
+#define BED_MEDIUM_MIN_X 2.8
+#define BED_MEDIUM_MAX_Y 107.0
+#define BED_MEDIUM_MIN_Y -6.6
 #define BED_MEDIUM_MAX_Z 73.5
 #define BED_MEDIUM_MIN_Z BED_LOW_MAX_Z
-#define BED_HIGH_MAX_X 81.95
-#define BED_HIGH_MIN_X 2.4
-#define BED_HIGH_MAX_Y 92.89999
-#define BED_HIGH_MIN_Y 20.1
-#define BED_HIGH_MAX_Z 111.95
+#define BED_HIGH_MAX_X 82.0
+#define BED_HIGH_MIN_X 2.35
+#define BED_HIGH_MAX_Y 92.95
+#define BED_HIGH_MIN_Y 20.05
+#define BED_HIGH_MAX_Z 112.0
 #define BED_HIGH_MIN_Z BED_MEDIUM_MAX_Z
 
 // Filament details
@@ -155,6 +156,7 @@ class Printer {
 		void setBedCompensationPreprocessor();
 		void setBacklashCompensationPreprocessor();
 		void setFeedRateConversionPreprocessor();
+		void setCenterModelPreprocessor();
 		
 		
 		/*
@@ -208,8 +210,11 @@ class Printer {
 		// Create settings file
 		bool createSettingsFile();
 		
-		// Get print information
-		bool getPrintInformation();
+		// Checks if file to print doesn't go past the printer's boundaries
+		bool checkPrintDimensions(const char *file, bool overrideCenterModelPreprocessor);
+		
+		// Get max
+		double max(double first, double second);
 		
 		// Get bounded temperature
 		uint16_t getBoundedTemperature(uint16_t temperature);
@@ -223,20 +228,36 @@ class Printer {
 		// Is sharp corner
 		bool isSharpCorner(const Gcode &point, const Gcode &refrence);
 		
-		// Get current adjustment Z
+		// get current adjustment Z
 		double getCurrentAdjustmentZ();
+		
+		// Calculate plane normal vector
+		Vector calculatePlaneNormalVector(const Vector &v1, const Vector &v2, const Vector &v3);
+		
+		// Generate plane equation
+		Vector generatePlaneEquation(const Vector &v1, const Vector &v2, const Vector &v3);
 		
 		// Get height adjustment required
 		double getHeightAdjustmentRequired(double x, double y);
 		
+		// Get Z from XY plane
+		double getZFromXYAndPlane(const Vector &point, const Vector &planeABC);
+		
+		// Is point in triangle
+		bool isPointInTriangle(const Vector &pt, const Vector &v1, const Vector &v2, const Vector &v3);
+		
+		// Sign
+		double sign(const Vector &p1, const Vector &p2, const Vector &p3);
+		
 		// Pre-processor stages
-		bool validationPreprocessor();
-		bool preparationPreprocessor();
-		bool waveBondingPreprocessor();
-		bool thermalBondingPreprocessor();
-		bool bedCompensationPreprocessor();
-		bool backlashCompensationPreprocessor();
-		bool feedRateConversionPreprocessor();
+		bool validationPreprocessor(const char *file);
+		bool preparationPreprocessor(const char *file, bool overrideCornerExcess);
+		bool waveBondingPreprocessor(const char *file);
+		bool thermalBondingPreprocessor(const char *file, bool overrideWaveBondingPreprocessor);
+		bool bedCompensationPreprocessor(const char *file);
+		bool backlashCompensationPreprocessor(const char *file);
+		bool feedRateConversionPreprocessor(const char *file);
+		bool centerModelPreprocessor(const char *file);
 		
 		// Use pre-processor stages 
 		bool useValidation;
@@ -246,13 +267,24 @@ class Printer {
 		bool useBedCompensation;
 		bool useBacklashCompensation;
 		bool useFeedRateConversion;
+		bool useCenterModel;
+		bool ignorePrintDimensionLimitations;
 		
 		// Print values
-		double minXModel, minYModel, minZModel;
-		double maxXModel, maxYModel, maxZModel;
-		double minXExtruder, minYExtruder, minZExtruder;
-		double maxXExtruder, maxYExtruder, maxZExtruder;
-		double minFeedRate, maxFeedRate;
+		double maxXExtruderLow;
+		double maxXExtruderMedium;
+		double maxXExtruderHigh;
+		double maxYExtruderLow;
+		double maxYExtruderMedium;
+		double maxYExtruderHigh;
+		double maxZExtruder;
+		double minXExtruderLow;
+		double minXExtruderMedium;
+		double minXExtruderHigh;
+		double minYExtruderLow;
+		double minYExtruderMedium;
+		double minYExtruderHigh;
+		double minZExtruder;
 		
 		// Working folder location
 		string workingFolderLocation;

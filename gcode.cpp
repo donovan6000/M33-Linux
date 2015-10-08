@@ -4,20 +4,18 @@
 #include "gcode.h"
 
 
+// Definitions
+#define ORDER "NMGXYZE FTSP    IJRD"
+
+
 // Supporting function implementation
 Gcode::Gcode() {
 
 	// Set parameter value size
-	parameterValue.resize(16);
+	parameterValue.resize(strlen(ORDER));
 	
 	// Set inital data type
 	dataType = 0x1080;
-	
-	// Clear parsed
-	parsed = false;
-	
-	// Set empty
-	empty = true;
 }
 
 Gcode::Gcode(Gcode &value) {
@@ -31,218 +29,79 @@ Gcode::Gcode(Gcode &value) {
 	// Copy parameter values
 	value.parameterValue = this->parameterValue;
 	
-	// Copy parsed
-	value.parsed = this->parsed;
-	
 	// Copy original command
 	value.originalCommand = this->originalCommand;
-	
-	// Copy empty
-	value.empty = this->empty;
 }
 
 bool Gcode::parseLine(const char *line) {
 
 	// Initialize variables
+	string command = line, currentValue;
+	size_t characterOffset;
 	char parameterIdentifier = 0;
-	string currentValue;
-	char *commandStart;
-	
-	// Reset parameter values
-	parameterValue.clear();
-	parameterValue.resize(16);
+	const char *parameterOffset;
 	
 	// Reset data type
 	dataType = 0x1080;
 	
-	// Reset parsed
-	parsed = false;
-	
-	// Clear empty
-	empty = false;
+	// Reset parameter values
+	parameterValue.clear();
+	parameterValue.resize(strlen(ORDER));
 	
 	// Clear host command
 	hostCommand.clear();
 	
-	// Skip leading whitespace
-	for(commandStart = const_cast<char *>(line); strlen(commandStart) && (*commandStart == ' ' || *commandStart == '\t' || *commandStart == '\r' || *commandStart == '\n'); commandStart++);
+	// Check if command contains a checksum
+	if((characterOffset = command.find('*')) != string::npos)
+	
+		// Remove checksum
+		command = command.substr(0, characterOffset);
+	
+	// Remove leading and trailing whitespace
+	if((characterOffset = command.find_first_not_of(" \t\n\r")) != string::npos)
+		command = command.substr(characterOffset);
+	if((characterOffset = command.find_last_not_of(" \t\n\r")) != string::npos)
+		command = command.substr(0, characterOffset + 1);
 	
 	// Set original command
-	originalCommand = commandStart;
+	originalCommand = command;
 	
-	// Remove trailing whitespace from original command
-	while(!originalCommand.empty() && (originalCommand.back() == ' ' || originalCommand.back() == '\t' || originalCommand.back() == '\r' || originalCommand.back() == '\n'))
-		originalCommand.pop_back();
+	// Check if command contains a comment
+	if((characterOffset = command.find(';')) != string::npos)
+
+		// Remove comment
+		command = command.substr(0, characterOffset);
 	
-	// Check if host command
-	if(commandStart[0] == '@') {
+	// Check if command is empty
+	if(!command.length())
+	
+		// Return false
+		return false;
+	
+	// Check if command is a host command
+	if(command[0] == '@') {
 	
 		// Set host command
-		hostCommand = commandStart;
+		hostCommand = command;
 		
-		// Remove trailing comment if it exists
-		if(hostCommand.find(";") != string::npos)
-			hostCommand.erase(hostCommand.find(";"));
-		
-		// Remove trailing whitespace
-		while(hostCommand.back() == ' ' || hostCommand.back() == '\t' || hostCommand.back() == '\r' || hostCommand.back() == '\n')
-			hostCommand.pop_back();
-		
-		// Set parsed
-		parsed = true;
-	
 		// Return true
 		return true;
 	}
-
+	
 	// Go through data
-	for(uint8_t i = 0; i <= strlen(commandStart); i++) {
+	for(uint8_t i = 0; i <= command.length(); i++) {
 	
 		// Check if a parameter is detected
-		if(i == 0 || (commandStart[i] >= 'A' && commandStart[i] <= 'Z') || commandStart[i] == ';' || commandStart[i] == '*' || commandStart[i] == ' ' || !commandStart[i]) {
+		if(i == 0 || isupper(command[i]) || command[i] == ' ' || !command[i]) {
 		
-			// Check if value has been obtained for the parameter
-			if(i) {
+			// Check if valid value has been obtained for the parameter
+			if(i && parameterIdentifier != ' ' && (parameterOffset = strchr(ORDER, parameterIdentifier))) {
 			
-				// Enforce parameter order as N, M, G, X, Y, Z, E, F, T, S, P, I, J, R, D then string
-				switch(parameterIdentifier) {
-				
-					case 'N':
-					
-						// Set data type
-						dataType |= 1;
-					
-						// Store parameter value
-						parameterValue[0] = currentValue;
-					break;
-					
-					case 'M':
-					
-						// Set data type
-						dataType |= (1 << 1);
-					
-						// Store parameter value
-						parameterValue[1] = currentValue;
-					break;
-					
-					case 'G':
-					
-						// Set data type
-						dataType |= (1 << 2);
-					
-						// Store parameter value
-						parameterValue[2] = currentValue;
-					break;
-					
-					case 'X':
-					
-						// Set data type
-						dataType |= (1 << 3);
-					
-						// Store parameter value
-						parameterValue[3] = currentValue;
-					break;
-					
-					case 'Y':
-					
-						// Set data type
-						dataType |= (1 << 4);
-					
-						// Store parameter value
-						parameterValue[4] = currentValue;
-					break;
-					
-					case 'Z':
-					
-						// Set data type
-						dataType |= (1 << 5);
-						
-						// Store parameter value
-						parameterValue[5] = currentValue;
-					break;
-					
-					
-					case 'E':
-					
-						// Set data type
-						dataType |= (1 << 6);
-						
-						// Store parameter value
-						parameterValue[6] = currentValue;
-					break;
-					
-					case 'F':
-					
-						// Set data type
-						dataType |= (1 << 8);
-					
-						// Store parameter value
-						parameterValue[7] = currentValue;
-					break;
-					
-					case 'T':
-					
-						// Set data type
-						dataType |= (1 << 9);
-					
-						// Store parameter value
-						parameterValue[8] = currentValue;
-					break;
-					
-					case 'S':
-					
-						// Set data type
-						dataType |= (1 << 10);
-					
-						// Store parameter value
-						parameterValue[9] = currentValue;
-					break;
-					
-					case 'P':
-					
-						// Set data type
-						dataType |= (1 << 11);
-					
-						// Store parameter value
-						parameterValue[10] = currentValue;
-					break;
-					
-					case 'I':
-					
-						// Set data type
-						dataType |= (1 << 16);
-					
-						// Store parameter value
-						parameterValue[11] = currentValue;
-					break;
-					
-					case 'J':
-					
-						// Set data type
-						dataType |= (1 << 17);
-					
-						// Store parameter value
-						parameterValue[12] = currentValue;
-					break;
-					
-					case 'R':
-					
-						// Set data type
-						dataType |= (1 << 18);
-					
-						// Store parameter value
-						parameterValue[13] = currentValue;
-					break;
-					
-					case 'D':
-					
-						// Set data type
-						dataType |= (1 << 19);
-					
-						// Store parameter value
-						parameterValue[14] = currentValue;
-					break;
-				}
+				// Set data type
+				dataType |= (1 << (parameterOffset - ORDER));
+			
+				// Store parameter value
+				parameterValue[parameterOffset - ORDER] = currentValue;
 			}
 			
 			// Reset current value
@@ -252,81 +111,300 @@ bool Gcode::parseLine(const char *line) {
 			if(parameterIdentifier == 'M' && (parameterValue[1] == "23" || parameterValue[1] == "28" || parameterValue[1] == "29" || parameterValue[1] == "30" || parameterValue[1] == "32" || parameterValue[1] == "117")) {
 			
 				// Get string data
-				for(; i < strlen(commandStart) && commandStart[i] != ';' && commandStart[i] != '\r' && commandStart[i] != '\n'; i++)
-					currentValue.push_back(commandStart[i]);
+				for(; i < command.length(); i++)
+					currentValue.push_back(command[i]);
+			
+				// Remove leading and trailing whitespace
+				if((characterOffset = currentValue.find_first_not_of(" \t\n\r")) != string::npos)
+					currentValue = currentValue.substr(characterOffset);
+				if((characterOffset = currentValue.find_last_not_of(" \t\n\r")) != string::npos)
+					currentValue = currentValue.substr(0, characterOffset + 1);
 				
-				// Check if a string exists
-				if(!currentValue.empty()) {
+				// Set string parameter
+				parameterValue[15] = currentValue;
 				
+				// Check if string exists
+				if(!parameterValue[15].empty())
+					
 					// Set data type
 					dataType |= (1 << 15);
-				
-					// Store parameter value
-					parameterValue[15] = currentValue;
-				}
+		
+				// Stop parsing line
+				break;
 			}
 			
-			// Check if a comment or checksum is detected
-			if(commandStart[i] == ';' || commandStart[i] == '*')
-		
-				// Stop parsing
-				break;
-			
 			// Set parameter identifier
-			parameterIdentifier = commandStart[i];
+			parameterIdentifier = command[i];
 		}
 	
 		// Otherwise check if value isn't whitespace
-		else if(commandStart[i] != ' ' && commandStart[i] != '\t' && commandStart[i] != '\r' && commandStart[i] != '\n')
+		else if(!isspace(command[i]))
 	
 			// Get current value
-			currentValue.push_back(commandStart[i]);
+			currentValue.push_back(command[i]);
 	}
 	
-	// Return if data wasn't empty and set parsed
-	return parsed = dataType != 0x1080;
+	// Return if data wasn't empty
+	return dataType != 0x1080;
 }
 
 bool Gcode::parseLine(const string &line) {
 
-	// Return if line was successfully parsed
+	// Return parse line
 	return parseLine(line.c_str());
+}
+
+bool Gcode::parseBinary(const char *line) {
+
+	// Initialize variables
+	uint8_t index = 4;
+	int32_t *tempPointer;
+	float tempFloat;
+
+	// Set data type
+	dataType = (line[0] & 0xF0) + (line[0] & 0x0F) + (((line[1] & 0xF0) + (line[1] & 0x0F)) << 8) + (((line[2] & 0xF0) + (line[2] & 0x0F)) << 16) + (((line[3] & 0xF0) + (line[3] & 0x0F)) << 24);
+	
+	// Check if command contains no data
+	if(!dataType || dataType == 0x1080)
+	
+		// Return false
+		return false;
+	
+	// Reset parameter values
+	parameterValue.clear();
+	parameterValue.resize(strlen(ORDER));
+	
+	// Clear host command
+	hostCommand.clear();
+	
+	// Check if command contains a string parameter
+	if(dataType & (1 << 15))
+	
+		// Increment parameter location index
+		index++;
+	
+	// Check if command contains an N value
+	if(dataType & 1) {
+	
+		// Set parameter value
+		parameterValue[0] = to_string((line[index] & 0xF0) + (line[index] & 0x0F) + (((line[index + 1] & 0xF0) + (line[index + 1] & 0x0F)) << 8));
+		
+		// Increment parameter location index
+		index += 2;
+	}
+	
+	// Check if command contains an M value
+	if(dataType & (1 << 1)) {
+	
+		// Set parameter value
+		parameterValue[1] = to_string((line[index] & 0xF0) + (line[index] & 0x0F) + (((line[index + 1] & 0xF0) + (line[index + 1] & 0x0F)) << 8));
+		
+		// Increment parameter location index
+		index += 2;
+	}
+	
+	// Check if command contains an G value
+	if(dataType & (1 << 2)) {
+	
+		// Set parameter value
+		parameterValue[2] = to_string((line[index] & 0xF0) + (line[index] & 0x0F) + (((line[index + 1] & 0xF0) + (line[index + 1] & 0x0F)) << 8));
+		
+		// Increment parameter location index
+		index += 2;
+	}
+	
+	// Check if command contains an X value
+	if(dataType & (1 << 3)) {
+	
+		// Set parameter value
+		tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
+		*tempPointer = (line[index] & 0xF0) + (line[index] & 0x0F) + (((line[index + 1] & 0xF0) + (line[index + 1] & 0x0F)) << 8) + (((line[index + 2] & 0xF0) + (line[index + 2] & 0x0F)) << 16) + (((line[index + 3] & 0xF0) + (line[index + 3] & 0x0F)) << 24);
+		parameterValue[3] = to_string(tempFloat);
+		
+		// Increment parameter location index
+		index += 4;
+	}
+	
+	// Check if command contains a Y value
+	if(dataType & (1 << 4)) {
+	
+		// Set parameter value
+		tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
+		*tempPointer = (line[index] & 0xF0) + (line[index] & 0x0F) + (((line[index + 1] & 0xF0) + (line[index + 1] & 0x0F)) << 8) + (((line[index + 2] & 0xF0) + (line[index + 2] & 0x0F)) << 16) + (((line[index + 3] & 0xF0) + (line[index + 3] & 0x0F)) << 24);
+		parameterValue[4] = to_string(tempFloat);
+		
+		// Increment parameter location index
+		index += 4;
+	}
+	
+	// Check if command contains a Z value
+	if(dataType & (1 << 5)) {
+	
+		// Set parameter value
+		tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
+		*tempPointer = (line[index] & 0xF0) + (line[index] & 0x0F) + (((line[index + 1] & 0xF0) + (line[index + 1] & 0x0F)) << 8) + (((line[index + 2] & 0xF0) + (line[index + 2] & 0x0F)) << 16) + (((line[index + 3] & 0xF0) + (line[index + 3] & 0x0F)) << 24);
+		parameterValue[5] = to_string(tempFloat);
+		
+		// Increment parameter location index
+		index += 4;
+	}
+	
+	// Check if command contains an E value
+	if(dataType & (1 << 6)) {
+	
+		// Set parameter value
+		tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
+		*tempPointer = (line[index] & 0xF0) + (line[index] & 0x0F) + (((line[index + 1] & 0xF0) + (line[index + 1] & 0x0F)) << 8) + (((line[index + 2] & 0xF0) + (line[index + 2] & 0x0F)) << 16) + (((line[index + 3] & 0xF0) + (line[index + 3] & 0x0F)) << 24);
+		parameterValue[6] = to_string(tempFloat);
+		
+		// Increment parameter location index
+		index += 4;
+	}
+	
+	// Check if command contains an F value
+	if(dataType & (1 << 8)) {
+	
+		// Set parameter value
+		tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
+		*tempPointer = (line[index] & 0xF0) + (line[index] & 0x0F) + (((line[index + 1] & 0xF0) + (line[index + 1] & 0x0F)) << 8) + (((line[index + 2] & 0xF0) + (line[index + 2] & 0x0F)) << 16) + (((line[index + 3] & 0xF0) + (line[index + 3] & 0x0F)) << 24);
+		parameterValue[8] = to_string(tempFloat);
+		
+		// Increment parameter location index
+		index += 4;
+	}
+	
+	// Check if command contains a T value
+	if(dataType & (1 << 9)) {
+	
+		// Set parameter value
+		parameterValue[9] = to_string((line[index] & 0xF0) + (line[index] & 0x0F));
+		
+		// Increment parameter location index
+		index++;
+	}
+	
+	// Check if command contains an S value
+	if(dataType & (1 << 10)) {
+	
+		// Set parameter value
+		parameterValue[10] = to_string((line[index] & 0xF0) + (line[index] & 0x0F) + (((line[index + 1] & 0xF0) + (line[index + 1] & 0x0F)) << 8) + (((line[index + 2] & 0xF0) + (line[index + 2] & 0x0F)) << 16) + (((line[index + 3] & 0xF0) + (line[index + 3] & 0x0F)) << 24));
+		
+		// Increment parameter location index
+		index += 4;
+	}
+	
+	// Check if command contains a P value
+	if(dataType & (1 << 11)) {
+	
+		// Set parameter value
+		parameterValue[11] = to_string((line[index] & 0xF0) + (line[index] & 0x0F) + (((line[index + 1] & 0xF0) + (line[index + 1] & 0x0F)) << 8) + (((line[index + 2] & 0xF0) + (line[index + 2] & 0x0F)) << 16) + (((line[index + 3] & 0xF0) + (line[index + 3] & 0x0F)) << 24));
+		
+		// Increment parameter location index
+		index += 4;
+	}
+	
+	// Check if command contains an I value
+	if(dataType & (1 << 16)) {
+	
+		// Set parameter value
+		tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
+		*tempPointer = (line[index] & 0xF0) + (line[index] & 0x0F) + (((line[index + 1] & 0xF0) + (line[index + 1] & 0x0F)) << 8) + (((line[index + 2] & 0xF0) + (line[index + 2] & 0x0F)) << 16) + (((line[index + 3] & 0xF0) + (line[index + 3] & 0x0F)) << 24);
+		parameterValue[16] = to_string(tempFloat);
+		
+		// Increment parameter location index
+		index += 4;
+	}
+	
+	// Check if command contains a J value
+	if(dataType & (1 << 17)) {
+	
+		// Set parameter value
+		tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
+		*tempPointer = (line[index] & 0xF0) + (line[index] & 0x0F) + (((line[index + 1] & 0xF0) + (line[index + 1] & 0x0F)) << 8) + (((line[index + 2] & 0xF0) + (line[index + 2] & 0x0F)) << 16) + (((line[index + 3] & 0xF0) + (line[index + 3] & 0x0F)) << 24);
+		parameterValue[17] = to_string(tempFloat);
+		
+		// Increment parameter location index
+		index += 4;
+	}
+	
+	// Check if command contains an R value
+	if(dataType & (1 << 18)) {
+	
+		// Set parameter value
+		tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
+		*tempPointer = (line[index] & 0xF0) + (line[index] & 0x0F) + (((line[index + 1] & 0xF0) + (line[index + 1] & 0x0F)) << 8) + (((line[index + 2] & 0xF0) + (line[index + 2] & 0x0F)) << 16) + (((line[index + 3] & 0xF0) + (line[index + 3] & 0x0F)) << 24);
+		parameterValue[18] = to_string(tempFloat);
+		
+		// Increment parameter location index
+		index += 4;
+	}
+	
+	// Check if command contains a D value
+	if(dataType & (1 << 19)) {
+	
+		// Set parameter value
+		tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
+		*tempPointer = (line[index] & 0xF0) + (line[index] & 0x0F) + (((line[index + 1] & 0xF0) + (line[index + 1] & 0x0F)) << 8) + (((line[index + 2] & 0xF0) + (line[index + 2] & 0x0F)) << 16) + (((line[index + 3] & 0xF0) + (line[index + 3] & 0x0F)) << 24);
+		parameterValue[19] = to_string(tempFloat);
+		
+		// Increment parameter location index
+		index += 4;
+	}
+	
+	// Check if command contains a string parameter
+	if(dataType & (1 << 15))
+	
+		// Set string parameter value
+		for(uint8_t i = 0; i < (line[4] & 0xF0) + (line[4] & 0x0F); i++)
+			parameterValue[15].push_back(line[index + i]);
+	
+	// Set original command
+	originalCommand = getAscii();
+	
+	// Return true
+	return true;
+}
+
+string Gcode::getOriginalCommand() const {
+
+	// Return original command
+	return originalCommand;
 }
 
 vector<uint8_t> Gcode::getBinary() const {
 
-	// Initialize variables
-	vector<uint8_t> request(4);
-	uint16_t sum1 = 0, sum2 = 0;
-	int32_t tempNumber, *tempPointer;
-	float tempFloat;
+	// Initialize request
+	vector<uint8_t> request;
 	
 	// Check if host command
-	if(!hostCommand.empty()) {
+	if(!hostCommand.empty())
 	
 		// Set request to host command
-		request.resize(0);
 		for(uint8_t i = 0; i < hostCommand.length(); i++)
 			request.push_back(hostCommand[i]);
-	}
 	
 	// Otherwise
 	else {
+	
+		// Initialize variables
+		uint16_t sum1 = 0, sum2 = 0;
+		int32_t tempNumber, *tempPointer;
+		float tempFloat;
 		
 		// Fill first four bytes of request to data type
-		request[0] = dataType;
-		request[1] = dataType >> 8;
-		request[2] = dataType >> 16;
-		request[3] = dataType >> 24;
+		request.push_back(dataType);
+		request.push_back(dataType >> 8);
+		request.push_back(dataType >> 16);
+		request.push_back(dataType >> 24);
 	
-		// Check if string parameter is set
-		if(dataType & (1 << 15))
+		// Check if command contains a string parameter
+		if(!parameterValue[15].empty())
 	
 			// Set fifth byte of request to string length
-			request.push_back(parameterValue[15].size());
+			request.push_back(parameterValue[15].length());
 		
-		// Check if command contains N and a value
-		if(dataType & 1 && !parameterValue[0].empty()) {
+		// Check if command contains an N value
+		if(!parameterValue[0].empty()) {
 		
 			// Set 2 byte integer parameter value
 			tempNumber = stoi(parameterValue[0]);
@@ -334,8 +412,8 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((tempNumber >> 8) & 0xFF);
 		}
 		
-		// Check if command contains M and a value
-		if(dataType & (1 << 1) && !parameterValue[1].empty()) {
+		// Check if command contains an M value
+		if(!parameterValue[1].empty()) {
 		
 			// Set 2 byte integer parameter value
 			tempNumber = stoi(parameterValue[1]);
@@ -343,8 +421,8 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((tempNumber >> 8) & 0xFF);
 		}
 		
-		// Check if command contains G and a value
-		if(dataType & (1 << 2) && !parameterValue[2].empty()) {
+		// CCheck if command contains a G value
+		if(!parameterValue[2].empty()) {
 		
 			// Set 2 byte integer parameter value
 			tempNumber = stoi(parameterValue[2]);
@@ -352,8 +430,8 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((tempNumber >> 8) & 0xFF);
 		}
 		
-		// Check if command contains X and a value
-		if(dataType & (1 << 3) && !parameterValue[3].empty()) {
+		// Check if command contains an X value
+		if(!parameterValue[3].empty()) {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[3]);
@@ -364,8 +442,8 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((*tempPointer >> 24) & 0xFF);
 		}
 		
-		// Check if command contains Y and a value
-		if(dataType & (1 << 4) && !parameterValue[4].empty()) {
+		// Check if command contains a Y value
+		if(!parameterValue[4].empty()) {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[4]);
@@ -376,8 +454,8 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((*tempPointer >> 24) & 0xFF);
 		}
 		
-		// Check if command contains Z and a value
-		if(dataType & (1 << 5) && !parameterValue[5].empty()) {
+		// Check if command contains a Z value
+		if(!parameterValue[5].empty()) {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[5]);
@@ -388,8 +466,8 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((*tempPointer >> 24) & 0xFF);
 		}
 		
-		// Check if command contains E and a value
-		if(dataType & (1 << 6) && !parameterValue[6].empty()) {
+		// Check if command contains an E value
+		if(!parameterValue[6].empty()) {
 			
 			// Set 4 byte float parameter value
 			tempFloat = stof(parameterValue[6]);
@@ -400,11 +478,11 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((*tempPointer >> 24) & 0xFF);
 		}
 		
-		// Check if command contains F and a value
-		if(dataType & (1 << 8) && !parameterValue[7].empty()) {
+		// Check if command contains an F value
+		if(!parameterValue[8].empty()) {
 			
 			// Set 4 byte float parameter value
-			tempFloat = stof(parameterValue[7]);
+			tempFloat = stof(parameterValue[8]);
 			tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
 			request.push_back(*tempPointer & 0xFF);
 			request.push_back((*tempPointer >> 8) & 0xFF);
@@ -412,27 +490,16 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((*tempPointer >> 24) & 0xFF);
 		}
 		
-		// Check if command contains T and a value
-		if(dataType & (1 << 9) && !parameterValue[8].empty()) {
+		// Check if command contains a T value
+		if(!parameterValue[9].empty()) {
 		
 			// Set 1 byte integer parameter value
-			tempNumber = stoi(parameterValue[8]);
+			tempNumber = stoi(parameterValue[9]);
 			request.push_back(tempNumber & 0xFF);
 		}
 		
-		// Check if command contains S and a value
-		if(dataType & (1 << 10) && !parameterValue[9].empty()) {
-			
-			// Set 4 byte integer parameter value
-			tempNumber = static_cast<int>(round(stod(parameterValue[9])));
-			request.push_back(tempNumber & 0xFF);
-			request.push_back((tempNumber >> 8) & 0xFF);
-			request.push_back((tempNumber >> 16) & 0xFF);
-			request.push_back((tempNumber >> 24) & 0xFF);
-		}
-		
-		// Check if command contains P and a value
-		if(dataType & (1 << 11) && !parameterValue[10].empty()) {
+		// Check if command contains an S value
+		if(!parameterValue[10].empty()) {
 			
 			// Set 4 byte integer parameter value
 			tempNumber = static_cast<int>(round(stod(parameterValue[10])));
@@ -442,11 +509,22 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((tempNumber >> 24) & 0xFF);
 		}
 		
-		// Check if command contains I and a value
-		if(dataType & (1 << 16) && !parameterValue[11].empty()) {
+		// Check if command contains a P value
+		if(!parameterValue[11].empty()) {
+			
+			// Set 4 byte integer parameter value
+			tempNumber = static_cast<int>(round(stod(parameterValue[11])));
+			request.push_back(tempNumber & 0xFF);
+			request.push_back((tempNumber >> 8) & 0xFF);
+			request.push_back((tempNumber >> 16) & 0xFF);
+			request.push_back((tempNumber >> 24) & 0xFF);
+		}
+		
+		// Check if command contains an I value
+		if(!parameterValue[16].empty()) {
 			
 			// Set 4 byte float parameter value
-			tempFloat = stof(parameterValue[11]);
+			tempFloat = stof(parameterValue[16]);
 			tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
 			request.push_back(*tempPointer & 0xFF);
 			request.push_back((*tempPointer >> 8) & 0xFF);
@@ -454,11 +532,11 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((*tempPointer >> 24) & 0xFF);
 		}
 		
-		// Check if command contains J and a value
-		if(dataType & (1 << 17) && !parameterValue[12].empty()) {
+		// Check if command contains a J value
+		if(!parameterValue[17].empty()) {
 			
 			// Set 4 byte float parameter value
-			tempFloat = stof(parameterValue[12]);
+			tempFloat = stof(parameterValue[17]);
 			tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
 			request.push_back(*tempPointer & 0xFF);
 			request.push_back((*tempPointer >> 8) & 0xFF);
@@ -466,11 +544,11 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((*tempPointer >> 24) & 0xFF);
 		}
 		
-		// Check if command contains R and a value
-		if(dataType & (1 << 18) && !parameterValue[13].empty()) {
+		// Check if command contains an R value
+		if(!parameterValue[18].empty()) {
 			
 			// Set 4 byte float parameter value
-			tempFloat = stof(parameterValue[13]);
+			tempFloat = stof(parameterValue[18]);
 			tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
 			request.push_back(*tempPointer & 0xFF);
 			request.push_back((*tempPointer >> 8) & 0xFF);
@@ -478,11 +556,11 @@ vector<uint8_t> Gcode::getBinary() const {
 			request.push_back((*tempPointer >> 24) & 0xFF);
 		}
 		
-		// Check if command contains D and a value
-		if(dataType & (1 << 19) && !parameterValue[14].empty()) {
+		// Check if command contains a D value
+		if(!parameterValue[19].empty()) {
 			
 			// Set 4 byte float parameter value
-			tempFloat = stof(parameterValue[14]);
+			tempFloat = stof(parameterValue[19]);
 			tempPointer = reinterpret_cast<int32_t *>(&tempFloat);
 			request.push_back(*tempPointer & 0xFF);
 			request.push_back((*tempPointer >> 8) & 0xFF);
@@ -491,7 +569,7 @@ vector<uint8_t> Gcode::getBinary() const {
 		}
 		
 		// Check if command contains a string
-		if(dataType & (1 << 15))
+		if(!parameterValue[15].empty())
 		
 			// Set string parameter value
 			for(uint8_t i = 0; i < parameterValue[15].length(); i++)
@@ -515,9 +593,6 @@ vector<uint8_t> Gcode::getBinary() const {
 }
 
 string Gcode::getAscii() const {
-
-	// Initialize variables
-	string request;
 	
 	// Check if host command
 	if(!hostCommand.empty())
@@ -525,103 +600,25 @@ string Gcode::getAscii() const {
 		// Return host command
 		return hostCommand;
 	
-	// Check if command contains N
-	if(dataType & 1)
-		
-		// Append parameter identifier and value
-		request += 'N' + parameterValue[0] + ' ';
+	// Initialize request
+	string request;
 	
-	// Check if command contains M
-	if(dataType & (1 << 1)) {
+	// Go through all values
+	for(uint8_t i = 0; i < strlen(ORDER); i++)
 		
-		// Append parameter identifier and value
-		request += 'M' + parameterValue[1] + ' ';
+		// Check if command contains value and value is valid
+		if(dataType & (1 << i) && 0xF0F7F & (1 << i)) {
 		
-		// Check if command contains a string
-		if(dataType & (1 << 15))
-		
-			// Append string to request
-			request += parameterValue[15] + ' ';
-	}
+			// Append parameter identifier and value
+			request += ORDER[i] + parameterValue[i] + ' ';
+			
+			// Check if M command contains a string
+			if(i == 1 && dataType & (1 << 15))
 	
-	// Check if command contains G
-	if(dataType & (1 << 2))
-		
-		// Append parameter identifier and value
-		request += 'G' + parameterValue[2] + ' ';
+				// Append string to request
+				request += parameterValue[15] + ' ';
+		}
 	
-	// Check if command contains X
-	if(dataType & (1 << 3))
-		
-		// Append parameter identifier and value
-		request += 'X' + parameterValue[3] + ' ';
-	
-	// Check if command contains Y
-	if(dataType & (1 << 4))
-		
-		// Append parameter identifier and value
-		request += 'Y' + parameterValue[4] + ' ';
-	
-	// Check if command contains Z
-	if(dataType & (1 << 5))
-		
-		// Append parameter identifier and value
-		request += 'Z' + parameterValue[5] + ' ';
-	
-	// Check if command contains E
-	if(dataType & (1 << 6))
-		
-		// Append parameter identifier and value
-		request += 'E' + parameterValue[6] + ' ';
-	
-	// Check if command contains F
-	if(dataType & (1 << 8))
-		
-		// Append parameter identifier and value
-		request += 'F' + parameterValue[7] + ' ';
-	
-	// Check if command contains T
-	if(dataType & (1 << 9))
-		
-		// Append parameter identifier and value
-		request += 'T' + parameterValue[8] + ' ';
-	
-	// Check if command contains S
-	if(dataType & (1 << 10))
-		
-		// Append parameter identifier and value
-		request += 'S' + parameterValue[9] + ' ';
-	
-	// Check if command contains P
-	if(dataType & (1 << 11))
-		
-		// Append parameter identifier and value
-		request += 'P' + parameterValue[10] + ' ';
-	
-	// Check if command contains I
-	if(dataType & (1 << 16))
-		
-		// Append parameter identifier and value
-		request += 'I' + parameterValue[11] + ' ';
-	
-	// Check if command contains J
-	if(dataType & (1 << 17))
-		
-		// Append parameter identifier and value
-		request += 'J' + parameterValue[12] + ' ';
-	
-	// Check if command contains R
-	if(dataType & (1 << 18))
-		
-		// Append parameter identifier and value
-		request += 'R' + parameterValue[13] + ' ';
-	
-	// Check if command contains D
-	if(dataType & (1 << 19))
-		
-		// Append parameter identifier and value
-		request += 'D' + parameterValue[14] + ' ';
-
 	// Remove last space from request
 	if(!request.empty())
 		request.pop_back();
@@ -636,593 +633,96 @@ uint32_t Gcode::getDataType() const {
 	return dataType;
 }
 
-bool Gcode::hasParameter(char identifier) const {
+bool Gcode::hasParameter(char parameter) const {
 
-	// Check what parameter is requested
-	switch(identifier) {
-		
-		case 'N':
-		
+	// Check if parameter isn't a space
+	if(parameter != ' ') {
+	
+		// Check if parameter is valid
+		const char *parameterOffset = strchr(ORDER, parameter);
+		if(parameterOffset)
+	
 			// Return if value is set
-			return dataType & 1;
-		break;
-		
-		case 'M':
-		
-			// Return if value is set
-			return dataType & (1 << 1);
-		break;
-		
-		case 'G':
-		
-			// Return if value is set
-			return dataType & (1 << 2);
-		break;
-		
-		case 'X':
-		
-			// Return if value is set
-			return dataType & (1 << 3);
-		break;
-		
-		case 'Y':
-		
-			// Return if value is set
-			return dataType & (1 << 4);
-		break;
-		
-		case 'Z':
-		
-			// Return if value is set
-			return dataType & (1 << 5);
-		break;
-		
-		case 'E':
-		
-			// Return if value is set
-			return dataType & (1 << 6);
-		break;
-		
-		case 'F':
-		
-			// Return if value is set
-			return dataType & (1 << 8);
-		break;
-		
-		case 'T':
-		
-			// Return if value is set
-			return dataType & (1 << 9);
-		break;
-		
-		case 'S':
-		
-			// Return if value is set
-			return dataType & (1 << 10);
-		break;
-		
-		case 'P':
-		
-			// Return if value is set
-			return dataType & (1 << 11);
-		break;
-		
-		case 'I':
-		
-			// Return if value is set
-			return dataType & (1 << 16);
-		break;
-		
-		case 'J':
-		
-			// Return if value is set
-			return dataType & (1 << 17);
-		break;
-		
-		case 'R':
-		
-			// Return if value is set
-			return dataType & (1 << 18);
-		break;
-		
-		case 'D':
-		
-			// Return if value is set
-			return dataType & (1 << 19);
-		break;
+			return dataType & (1 << (parameterOffset - ORDER));
 	}
 	
 	// Return false
 	return false;
 }
 
-void Gcode::removeParameter(char identifier) {
+void Gcode::removeParameter(char parameter) {
 
-	// Check what parameter is set
-	switch(identifier) {
-		
-		case 'N':
-		
-			// Clear data type
-			dataType &= ~1;
-		
-			// Clear parameter value
-			parameterValue[0].clear();
-		break;
-		
-		case 'M':
+	// Check if parameter isn't a space
+	if(parameter != ' ') {
+	
+		// Check if parameter is valid
+		const char *parameterOffset = strchr(ORDER, parameter);
+		if(parameterOffset) {
 		
 			// Clear data type
-			dataType &= ~(1 << 1);
-		
+			dataType &= ~(1 << (parameterOffset - ORDER));
+			
 			// Clear parameter value
-			parameterValue[1].clear();
-		break;
+			parameterValue[parameterOffset - ORDER].clear();
 		
-		case 'G':
+			// Check if command is now empty
+			if(dataType == 0x1080)
 		
-			// Clear data type
-			dataType &= ~(1 << 2);
-		
-			// Clear parameter value
-			parameterValue[2].clear();
-		break;
-		
-		case 'X':
-		
-			// Clear data type
-			dataType &= ~(1 << 3);
-		
-			// Clear parameter value
-			parameterValue[3].clear();
-		break;
-		
-		case 'Y':
-		
-			// Clear data type
-			dataType &= ~(1 << 4);
-		
-			// Clear parameter value
-			parameterValue[4].clear();
-		break;
-		
-		case 'Z':
-		
-			// Clear data type
-			dataType &= ~(1 << 5);
-		
-			// Clear parameter value
-			parameterValue[5].clear();
-		break;
-		
-		case 'E':
-		
-			// Clear data type
-			dataType &= ~(1 << 6);
-		
-			// Clear parameter value
-			parameterValue[6].clear();
-		break;
-		
-		case 'F':
-		
-			// Clear data type
-			dataType &= ~(1 << 8);
-		
-			// Clear parameter value
-			parameterValue[7].clear();
-		break;
-		
-		case 'T':
-		
-			// Clear data type
-			dataType &= ~(1 << 9);
-		
-			// Clear parameter value
-			parameterValue[8].clear();
-		break;
-		
-		case 'S':
-		
-			// Clear data type
-			dataType &= ~(1 << 10);
-		
-			// Clear parameter value
-			parameterValue[9].clear();
-		break;
-		
-		case 'P':
-		
-			// Clear data type
-			dataType &= ~(1 << 11);
-		
-			// Clear parameter value
-			parameterValue[10].clear();
-		break;
-		
-		case 'I':
-		
-			// Clear data type
-			dataType &= ~(1 << 16);
-		
-			// Clear parameter value
-			parameterValue[11].clear();
-		break;
-		
-		case 'J':
-		
-			// Clear data type
-			dataType &= ~(1 << 17);
-		
-			// Clear parameter value
-			parameterValue[12].clear();
-		break;
-		
-		case 'R':
-		
-			// Clear data type
-			dataType &= ~(1 << 18);
-		
-			// Clear parameter value
-			parameterValue[13].clear();
-		break;
-		
-		case 'D':
-		
-			// Clear data type
-			dataType &= ~(1 << 19);
-		
-			// Clear parameter value
-			parameterValue[14].clear();
-		break;
+				// Clear original command
+				originalCommand = "";
+		}
 	}
 }
 
-bool Gcode::hasValue(char identifier) const {
+bool Gcode::hasValue(char parameter) const {
 
-	// Check what parameter is requested
-	switch(identifier) {
-		
-		case 'N':
-		
+	// Check if parameter isn't a space
+	if(parameter != ' ') {
+	
+		// Check if parameter is valid
+		const char *parameterOffset = strchr(ORDER, parameter);
+		if(parameterOffset)
+	
 			// Return if parameter's value isn't empty
-			return !parameterValue[0].empty();
-		break;
-		
-		case 'M':
-		
-			// Return if parameter's value isn't empty
-			return !parameterValue[1].empty();
-		break;
-		
-		case 'G':
-		
-			// Return if parameter's value isn't empty
-			return !parameterValue[2].empty();
-		break;
-		
-		case 'X':
-		
-			// Return if parameter's value isn't empty
-			return !parameterValue[3].empty();
-		break;
-		
-		case 'Y':
-		
-			// Return if parameter's value isn't empty
-			return !parameterValue[4].empty();
-		break;
-		
-		case 'Z':
-		
-			// Return if parameter's value isn't empty
-			return !parameterValue[5].empty();
-		break;
-		
-		case 'E':
-		
-			// Return if parameter's value isn't empty
-			return !parameterValue[6].empty();
-		break;
-		
-		case 'F':
-		
-			// Return if parameter's value isn't empty
-			return !parameterValue[7].empty();
-		break;
-		
-		case 'T':
-		
-			// Return if parameter's value isn't empty
-			return !parameterValue[8].empty();
-		break;
-		
-		case 'S':
-		
-			// Return if parameter's value isn't empty
-			return !parameterValue[9].empty();
-		break;
-		
-		case 'P':
-		
-			// Return if parameter's value isn't empty
-			return !parameterValue[10].empty();
-		break;
-		
-		case 'I':
-		
-			// Return if parameter's value isn't empty
-			return !parameterValue[11].empty();
-		break;
-		
-		case 'J':
-		
-			// Return if parameter's value isn't empty
-			return !parameterValue[12].empty();
-		break;
-		
-		case 'R':
-		
-			// Return if parameter's value isn't empty
-			return !parameterValue[13].empty();
-		break;
-		
-		case 'D':
-		
-			// Return if parameter's value isn't empty
-			return !parameterValue[15].empty();
-		break;
+			return !parameterValue[parameterOffset - ORDER].empty();
 	}
 	
 	// Return false
 	return false;
 }
 
-string Gcode::getValue(char identifier) const {
+string Gcode::getValue(char parameter) const {
 
-	// Check what parameter is requested
-	switch(identifier) {
-		
-		case 'N':
-		
-			// Return value
-			return parameterValue[0];
-		break;
-		
-		case 'M':
-		
-			// Return value
-			return parameterValue[1];
-		break;
-		
-		case 'G':
-		
-			// Return value
-			return parameterValue[2];
-		break;
-		
-		case 'X':
-		
-			// Return value
-			return parameterValue[3];
-		break;
-		
-		case 'Y':
-		
-			// Return value
-			return parameterValue[4];
-		break;
-		
-		case 'Z':
-		
-			// Return value
-			return parameterValue[5];
-		break;
-		
-		case 'E':
-		
-			// Return value
-			return parameterValue[6];
-		break;
-		
-		case 'F':
-		
-			// Return value
-			return parameterValue[7];
-		break;
-		
-		case 'T':
-		
-			// Return value
-			return parameterValue[8];
-		break;
-		
-		case 'S':
-		
-			// Return value
-			return parameterValue[9];
-		break;
-		
-		case 'P':
-		
-			// Return value
-			return parameterValue[10];
-		break;
-		
-		case 'I':
-		
-			// Return value
-			return parameterValue[11];
-		break;
-		
-		case 'J':
-		
-			// Return value
-			return parameterValue[12];
-		break;
-		
-		case 'R':
-		
-			// Return value
-			return parameterValue[13];
-		break;
-		
-		case 'D':
-		
-			// Return value
-			return parameterValue[14];
-		break;
+	// Check if parameter isn't a space
+	if(parameter != ' ') {
+	
+		// Check if parameter is valid
+		const char *parameterOffset = strchr(ORDER, parameter);
+		if(parameterOffset)
+	
+			// Return parameter's value
+			return parameterValue[parameterOffset - ORDER];
 	}
 	
 	// Return empty
 	return "";
 }
 
-void Gcode::setValue(char identifier, const string &value) {
+void Gcode::setValue(char parameter, const string &value) {
 
-	// Clear empty
-	empty = false;
+	// Check if parameter isn't a space
+	if(parameter != ' ') {
 	
-	// Set parsed
-	parsed = true;
-
-	// Check what parameter is set
-	switch(identifier) {
-		
-		case 'N':
-		
+		// Check if parameter is valid
+		const char *parameterOffset = strchr(ORDER, parameter);
+		if(parameterOffset) {
+	
 			// Set data type
-			dataType |= 1;
-		
+			dataType |= (1 << (parameterOffset - ORDER));
+	
 			// Set parameter value
-			parameterValue[0] = value;
-		break;
-		
-		case 'M':
-		
-			// Set data type
-			dataType |= (1 << 1);
-		
-			// Set parameter value
-			parameterValue[1] = value;
-		break;
-		
-		case 'G':
-		
-			// Set data type
-			dataType |= (1 << 2);
-		
-			// Set parameter value
-			parameterValue[2] = value;
-		break;
-		
-		case 'X':
-		
-			// Set data type
-			dataType |= (1 << 3);
-		
-			// Set parameter value
-			parameterValue[3] = value;
-		break;
-		
-		case 'Y':
-		
-			// Set data type
-			dataType |= (1 << 4);
-		
-			// Set parameter value
-			parameterValue[4] = value;
-		break;
-		
-		case 'Z':
-		
-			// Set data type
-			dataType |= (1 << 5);
-		
-			// Set parameter value
-			parameterValue[5] = value;
-		break;
-		
-		case 'E':
-		
-			// Set data type
-			dataType |= (1 << 6);
-		
-			// Set parameter value
-			parameterValue[6] = value;
-		break;
-		
-		case 'F':
-		
-			// Set data type
-			dataType |= (1 << 8);
-		
-			// Set parameter value
-			parameterValue[7] = value;
-		break;
-		
-		case 'T':
-		
-			// Set data type
-			dataType |= (1 << 9);
-		
-			// Set parameter value
-			parameterValue[8] = value;
-		break;
-		
-		case 'S':
-		
-			// Set data type
-			dataType |= (1 << 10);
-		
-			// Set parameter value
-			parameterValue[9] = value;
-		break;
-		
-		case 'P':
-		
-			// Set data type
-			dataType |= (1 << 11);
-		
-			// Set parameter value
-			parameterValue[10] = value;
-		break;
-		
-		case 'I':
-		
-			// Set data type
-			dataType |= (1 << 16);
-		
-			// Set parameter value
-			parameterValue[11] = value;
-		break;
-		
-		case 'J':
-		
-			// Set data type
-			dataType |= (1 << 17);
-		
-			// Set parameter value
-			parameterValue[12] = value;
-		break;
-		
-		case 'R':
-		
-			// Set data type
-			dataType |= (1 << 18);
-		
-			// Set parameter value
-			parameterValue[13] = value;
-		break;
-		
-		case 'D':
-		
-			// Set data type
-			dataType |= (1 << 19);
-		
-			// Set parameter value
-			parameterValue[14] = value;
-		break;
+			parameterValue[parameterOffset - ORDER] = value;
+		}
 	}
 }
 
@@ -1240,12 +740,6 @@ string Gcode::getString() const {
 
 void Gcode::setString(const string &value) {
 
-	// Clear empty
-	empty = false;
-	
-	// Set parsed
-	parsed = true;
-
 	// Set data type
 	dataType |= (1 << 15);
 
@@ -1255,30 +749,18 @@ void Gcode::setString(const string &value) {
 
 void Gcode::clear() {
 
-	// Set parameter value size
-	parameterValue.clear();
-	parameterValue.resize(16);
-	
 	// Set inital data type
 	dataType = 0x1080;
-	
-	// Clear parsed
-	parsed = false;
-	
-	// Set empty
-	empty = true;
+
+	// Set parameter value size
+	parameterValue.clear();
+	parameterValue.resize(strlen(ORDER));
 	
 	// Clear host command
 	hostCommand.clear();
 	
 	// Clear original command
 	originalCommand.clear();
-}
-
-bool Gcode::isParsed() const {
-
-	// Return parsed
-	return parsed;
 }
 
 bool Gcode::isHostCommand() const {
@@ -1289,8 +771,8 @@ bool Gcode::isHostCommand() const {
 
 bool Gcode::isEmpty() const {
 
-	// Return if empty is set
-	return empty;
+	// Return if doesn't contain any values
+	return dataType == 0x1080;
 }
 
 Gcode &Gcode::operator=(const Gcode &value) {
@@ -1308,14 +790,8 @@ Gcode &Gcode::operator=(const Gcode &value) {
 	// Copy parameter values
 	parameterValue = value.parameterValue;
 	
-	// Copy parsed
-	parsed = value.parsed;
-	
 	// Copy original command
 	originalCommand = value.originalCommand;
-	
-	// Copy empty
-	empty = value.empty;
 	
 	// Return self
 	return *this;
@@ -1324,5 +800,5 @@ Gcode &Gcode::operator=(const Gcode &value) {
 ostream &operator<<(ostream &output, const Gcode &gcode) {
 
 	// Return command sent to output
-	return output << (gcode.parsed ? gcode.getAscii() : gcode.originalCommand);
+	return output << (gcode.isEmpty() ? gcode.getOriginalCommand() : gcode.getAscii());
 }

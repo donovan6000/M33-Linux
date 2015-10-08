@@ -9,7 +9,7 @@ You can download the latest executable <a href="https://www.exploitkings.com/pub
 <br>
 The parameters that can be provided when running this program are as follows:
 <br>
-m3d-linux -v -p -w -t -b -l -f -r firmware.rom -c -i input.gcode -s -o output.gcode -e -d
+Usage: m3d-linux -v -c -p -w -t -b -l -f -x -r firmware.rom -a -i input.gcode -s -o output.gcode -e -d
 
 -v | --validation: Use validation pre-processor
 
@@ -25,9 +25,13 @@ m3d-linux -v -p -w -t -b -l -f -r firmware.rom -c -i input.gcode -s -o output.gc
 
 -f | --feedrateconversion: Use feed rate conversion pre-processor
 
+-c | --centermodel: Use center model pre-processor
+
 -r | --firmwarerom: Use the following parameter as the firmware ROM in case firmware is corrupt or outdated
 
--c | --forceflash: Forces the firmware to update to the provided ROM
+-x | --exit: Switches printer into firmware mode and exits if firmware is updated
+
+-a | --forceflash: Forces the firmware to update to the provided ROM
 
 -i | --inputfile: Use the following parameter as the G-code file to processes and send to the printer. G-code commands can be manually entered if no G-code file is not provided.
 
@@ -43,11 +47,13 @@ m3d-linux -v -p -w -t -b -l -f -r firmware.rom -c -i input.gcode -s -o output.gc
 
 --backlashY: Provide backlash Y
 
---backlashSpeed: Provide backlash Speed
+--backlashSpeed: Provide backlash speed
 
 --filamentTemperature: Provide filament temperature
 
 --filamentType: Provide filament type
+
+--bedHeightOffset: Provide bed height offset
 
 --backRightOffset: Provide back right offset
 

@@ -477,8 +477,8 @@ int main(int argc, char *argv[]) {
 	// Otherwise
 	else {
 	
-		// Check if not root
-	    	if(getuid()) {
+		// Check if not root and not just updating firmware
+	    	if(getuid() && (firmwareRom.empty() || !forceFlash || !exit)) {
 
 	    		// Display error
 			cout << "Elevated privileges required" << endl;

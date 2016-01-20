@@ -394,12 +394,18 @@ int main(int argc, char *argv[]) {
 		}
 		
 		// Go through the file name
-		for(uint8_t i = 0; i < firmwareRom.size(); i++) {
+		uint8_t i = 0;
+		if(firmwareRom.find(' ') != string::npos)
+			i = firmwareRom.find(' ') + 1;
+		for(; i < firmwareRom.size(); i++) {
 		
 			// Check if extension is occuring
 			if(firmwareRom[i] == '.') {
 			
 				// Break if file name beings with 10 numbers
+				if(firmwareRom.find(' ') != string::npos && i - firmwareRom.find(' ') - 1 == 10)
+					break;
+				
 				if(i == 10)
 					break;
 				

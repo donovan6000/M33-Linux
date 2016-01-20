@@ -1266,7 +1266,7 @@ bool Printer::printFile(const char *file) {
 			
 			// Send request
 			sendRequest(gcode);
-			cout << gcode.getAscii() << endl;
+			
 			// Append request to buffer
 			buffer.push(gcode.getAscii());
 		
@@ -1282,7 +1282,7 @@ bool Printer::printFile(const char *file) {
 		
 			// Get response
 			response = character + receiveResponse();
-			cout << response << endl;
+			
 			// Check if response was a processed value or skip value
 			if((response.length() >= 4 && response.substr(0, 2) == "ok" && response[3] >= '0' && response[3] <= '9') || (response.length() >= 6 && response.substr(0, 4) == "skip")) {
 				
@@ -1299,11 +1299,11 @@ bool Printer::printFile(const char *file) {
 			}
 			
 			// Otherwise check if response was a resend value
-			else if(response.length() >= 4 && response.substr(0, 2) == "rs") {
+			else if(response.length() >= 8 && response.substr(0, 6) == "Resend") {
 				
 				// Resend request
 				sendRequest(buffer.front());
-				cout << "resend" << endl;
+				
 			}
 			
 			// Wait before receiving next response

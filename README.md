@@ -1,10 +1,10 @@
 # M3D Linux
-© 2015 donovan6000
+© 2015 Exploit Kings. All rights reserved.
 
 A Linux program that can communicate with the Micro M3D printer
 <br>
 <br>
-You can download the latest executable <a href="https://www.exploitkings.com/public/m3d-linux-V0.16.zip">here</a> or the deb package <a href="https://www.exploitkings.com/public/m3d-linux-V0.16.deb">here</a>.
+M3D Linux was succeeded by <a href="https://github.com/donovan6000/M3D-Fio">M3D Fio</a> on October 15, 2015.
 <br>
 <br>
 The parameters that can be provided when running this program are as follows:

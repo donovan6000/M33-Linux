@@ -29,7 +29,7 @@ int main(int argc, char *argv[]) {
 	signal(SIGINT, breakHandler);
 	
 	// Display version
-	cout << "M3D Linux V0.16" << endl << endl;
+	cout << "M33 Linux V0.16" << endl << endl;
 	
 	// Go through all commands
 	for(uint8_t i = 0; i < argc; i++) {
@@ -38,7 +38,7 @@ int main(int argc, char *argv[]) {
 		if(!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
 		
 			// Display help
-			cout << "Usage: m3d-linux -v -c -p -w -t -b -l -f -x -r firmware.rom -a -i input.gcode -s -o output.gcode -e -d" << endl;
+			cout << "Usage: m33-linux -v -c -p -w -t -b -l -f -x -r firmware.rom -a -i input.gcode -s -o output.gcode -e -d" << endl;
 			cout << "-v | --validation: Use validation pre-processor" << endl;
 			cout << "-p | --preparation: Use preparation pre-processor" << endl;
 			cout << "-w | --wavebonding: Use wave bonding pre-processor" << endl;

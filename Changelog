@@ -13,11 +13,11 @@ V0.15 July 21, 2015
 V0.14 July 20, 2015
 
 	* Printer values that are used by the pre-processor stages can be provided as parameters
-	* Automatically creates /usr/share/m3d-linux after collecting printer information if it doesn't exist
+	* Automatically creates /usr/share/m33-linux after collecting printer information if it doesn't exist
 
 V0.13 July 15, 2015
 
-	* Saves printer settings to /usr/share/m3d-linux/settings whenever printer is connected. This allows the settings to be used for the pre-processor without the printer having to be connected
+	* Saves printer settings to /usr/share/m33-linux/settings whenever printer is connected. This allows the settings to be used for the pre-processor without the printer having to be connected
 
 V0.12 July 14, 2015
 
@@ -83,7 +83,7 @@ V0.3 July 3, 2015
 
 V0.2 July 1, 2015
 
-	* Implemented udev rule to map printer to /dev/micro_m3d, to change permission of printer to not require root, and avoid problems with Modem Manager
+	* Implemented udev rule to map printer to /dev/micro_3d, to change permission of printer to not require root, and avoid problems with Modem Manager
 	* Simplified connecting to the printer
 	* Moved G-code parser to its own class
 	* Started implementing G-code pre-processor

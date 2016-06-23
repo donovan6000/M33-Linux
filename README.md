@@ -1,15 +1,15 @@
-# M3D Linux
+# M33 Linux
 © 2015 Exploit Kings. All rights reserved.
 
-A Linux program that can communicate with the Micro M3D printer
+A Linux program that can communicate with the Micro 3D printer
 <br>
 <br>
-M3D Linux was succeeded by <a href="https://github.com/donovan6000/M3D-Fio">M3D Fio</a> on October 15, 2015.
+M33 Linux was succeeded by <a href="https://github.com/donovan6000/M33-Fio">M33 Fio</a> on October 15, 2015.
 <br>
 <br>
 The parameters that can be provided when running this program are as follows:
 <br>
-Usage: m3d-linux -v -c -p -w -t -b -l -f -x -r firmware.rom -a -i input.gcode -s -o output.gcode -e -d
+Usage: m33-linux -v -c -p -w -t -b -l -f -x -r firmware.rom -a -i input.gcode -s -o output.gcode -e -d
 
 -v | --validation: Use validation pre-processor
 
@@ -68,8 +68,8 @@ Usage: m3d-linux -v -c -p -w -t -b -l -f -x -r firmware.rom -a -i input.gcode -s
 If the printer's firmware is corrupt or the provided firmware rom is newer, it will update the firmware if a rom is provided. Firmware roms must be named after their version number, ex: 2015062401.rom. If the Z calibration of the printer is invalid, it will calibrate it automatically. If a G-code file is provided and it contains a line that indicated the ideal temperature, ex: ;ideal temp:195, then that temperature will be used for printing. Otherwise the temperature stored in the printer's EEPROM will be used.
 <br>
 <br>
-The 90-m3d-local.rules needs to applied in order to avoid issues. You can apply it like this:
+The 90-micro-3d-local.rules needs to applied in order to avoid issues. You can apply it like this:
 <br>
-cp ./90-m3d-local.rules /etc/udev/rules.d/
+cp ./90-micro-3d-local.rules /etc/udev/rules.d/
 <br>
 sudo /etc/init.d/udev restart

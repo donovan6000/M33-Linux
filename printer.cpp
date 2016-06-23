@@ -105,7 +105,7 @@ Printer::Printer() {
 		 tempPath = getenv("TMPDIR");
 	
 	// Create temporary folder
-	workingFolderLocation = mkdtemp(const_cast<char *>((static_cast<string>(tempPath == NULL ? P_tmpdir : tempPath) + "/m3d-XXXXXX").c_str()));
+	workingFolderLocation = mkdtemp(const_cast<char *>((static_cast<string>(tempPath == NULL ? P_tmpdir : tempPath) + "/m33-XXXXXX").c_str()));
 	
 	// Clear all use pre-processor stages
 	useValidation = false;
@@ -163,7 +163,7 @@ bool Printer::connect() {
 		usleep(250000);
 		
 		// Check if opening device was successful
-		if((fd = open("/dev/micro_m3d", O_RDWR | O_NONBLOCK)) != -1) {
+		if((fd = open("/dev/micro_3d", O_RDWR | O_NONBLOCK)) != -1) {
 		
 			// Create file lock
 			lock.l_type = F_WRLCK;
@@ -1816,11 +1816,11 @@ bool Printer::createSettingsFile() {
 	struct stat buffer;
 	
 	// Check if creating folder failed if it doesn't already exists
-	if(stat("/usr/share/m3d-linux", &buffer) == -1 && mkdir("/usr/share/m3d-linux", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1)
+	if(stat("/usr/share/m33-linux", &buffer) == -1 && mkdir("/usr/share/m33-linux", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1)
 		return false;
 	
 	// Create settings file
-	file.open("/usr/share/m3d-linux/settings", ios::out | ios::binary);
+	file.open("/usr/share/m33-linux/settings", ios::out | ios::binary);
 	
 	// Check if creating settings file was successful
 	if(file.good()) {
@@ -1859,18 +1859,18 @@ bool Printer::createSettingsFile() {
 			return false;
 		
 		// Check if changing permission of file failed
-		if(chmod("/usr/share/m3d-linux/settings", S_IRUSR | S_IRGRP | S_IROTH | S_IWUSR) == -1) {
+		if(chmod("/usr/share/m33-linux/settings", S_IRUSR | S_IRGRP | S_IROTH | S_IWUSR) == -1) {
 		
 			// Delete output file
-			unlink("/usr/share/m3d-linux/settings");
+			unlink("/usr/share/m33-linux/settings");
 			return false;
 		}
 		
 		// Check if changing ownership of file failed
-		if(chown("/usr/share/m3d-linux/settings", pwd->pw_uid, pwd->pw_gid) == -1) {
+		if(chown("/usr/share/m33-linux/settings", pwd->pw_uid, pwd->pw_gid) == -1) {
 		
 			// Delete output file
-			unlink("/usr/share/m3d-linux/settings");
+			unlink("/usr/share/m33-linux/settings");
 			return false;
 		}
 	
@@ -1886,7 +1886,7 @@ bool Printer::useSettingsFile() {
 
 	// Initialize variables
 	string line;
-	ifstream file("/usr/share/m3d-linux/settings", ios::in | ios::binary);
+	ifstream file("/usr/share/m33-linux/settings", ios::in | ios::binary);
 	
 	// Check if creating settings file was successful
 	if(file.good()) {

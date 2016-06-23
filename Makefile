@@ -1,4 +1,4 @@
-PROG = m3d-linux
+PROG = m33-linux
 CC = g++
 SRCS = main.cpp gcode.cpp printer.cpp vector.cpp
 CFLAGS = -Wall -std=c++14 -O3
